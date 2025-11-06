@@ -40,11 +40,15 @@ type CreateProductoInput = {
   imagenUrl?: string
 }
 
-export async function crearProducto(input: CreateProductoInput): Promise<Producto> {
+export async function crearProducto(input: CreateProductoInput, token: string): Promise<Producto> {
+  if (!token) {
+    throw new Error('Acceso de administrador requerido')
+  }
   const res = await fetch(`${API_BASE_URL}/products`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(input),
   })
@@ -60,9 +64,15 @@ export async function crearProducto(input: CreateProductoInput): Promise<Product
   return mapProducto(data)
 }
 
-export async function eliminarProducto(id: number): Promise<void> {
+export async function eliminarProducto(id: number, token: string): Promise<void> {
+  if (!token) {
+    throw new Error('Acceso de administrador requerido')
+  }
   const res = await fetch(`${API_BASE_URL}/products/${id}`, {
     method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   })
 
   if (!res.ok) {

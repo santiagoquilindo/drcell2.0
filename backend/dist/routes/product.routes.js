@@ -2,6 +2,21 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../config/database.js';
 const router = Router();
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? '';
+const requireAdmin = (req, res, next) => {
+    if (!ADMIN_TOKEN) {
+        console.error('ADMIN_TOKEN env variable is not configured');
+        return res.status(503).json({ message: 'Configuración de administrador incompleta' });
+    }
+    const header = req.headers.authorization ?? '';
+    const token = header.startsWith('Bearer ')
+        ? header.slice('Bearer '.length).trim()
+        : header.trim();
+    if (token !== ADMIN_TOKEN) {
+        return res.status(403).json({ message: 'No autorizado' });
+    }
+    next();
+};
 const imageSchema = z
     .string()
     .trim()
@@ -23,7 +38,7 @@ router.get('/', async (_req, res, next) => {
         next(error);
     }
 });
-router.post('/', async (req, res, next) => {
+router.post('/', requireAdmin, async (req, res, next) => {
     try {
         const data = productSchema.parse(req.body);
         const result = await pool.query(`
@@ -37,7 +52,7 @@ router.post('/', async (req, res, next) => {
         next(error);
     }
 });
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requireAdmin, async (req, res, next) => {
     try {
         const id = Number(req.params.id);
         if (!Number.isInteger(id)) {

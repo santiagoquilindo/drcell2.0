@@ -16,7 +16,7 @@ export function createApp() {
     app.use('/api', routes);
     app.use((err, _req, res, _next) => {
         if (err instanceof ZodError) {
-            return res.status(400).json({ message: 'Datos invalidos', issues: err.errors });
+            return res.status(400).json({ message: 'Datos invalidos', issues: err.issues });
         }
         if (err instanceof Error && err.message === 'Origin not allowed') {
             return res.status(403).json({ message: 'Origen no permitido' });

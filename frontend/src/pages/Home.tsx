@@ -12,10 +12,11 @@ import { useCart } from '@context/cart'
 import { crearProducto, eliminarProducto, fetchProductos } from '@utils/api'
 import { formatoCOP } from '@utils/money'
 import { abrirWhatsApp, construirMensajeWhatsApp, msgCompraVenta } from '@utils/whatsapp'
-import { Plus, Minus, X, Images, CreditCard, MapPin, Phone } from 'lucide-react'
+import { Plus, Minus, X, Images, CreditCard, MapPin, Phone, ShieldCheck, Lock, LogOut } from 'lucide-react'
 import { ImageWithFallback } from '@components/ImageWithFallback'
 
 const REPAIR_MEDIA_STORAGE_KEY = 'repair_media_dc2'
+const ADMIN_TOKEN_STORAGE_KEY = 'dc2_admin_token'
 
 // Modales de cotización (ya creados)
 import { RepairQuoteModal } from '@components/modals/RepairQuoteModal'
@@ -70,6 +71,31 @@ export const Home: React.FC = () => {
   const [productError, setProductError] = React.useState<string | null>(null)
   const [productSaving, setProductSaving] = React.useState(false)
 
+  const [adminToken, setAdminToken] = React.useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    const stored = window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY)
+    return stored ? stored : null
+  })
+  const [adminInput, setAdminInput] = React.useState('')
+  const [adminMessage, setAdminMessage] = React.useState<string | null>(null)
+  const [showAdminAccess, setShowAdminAccess] = React.useState(false)
+  const isAdmin = Boolean(adminToken)
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (adminToken) {
+      window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, adminToken)
+    } else {
+      window.localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY)
+    }
+  }, [adminToken])
+
+  React.useEffect(() => {
+    if (!isAdmin) {
+      setOpenNuevoProducto(false)
+    }
+  }, [isAdmin])
+
   React.useEffect(() => {
     let active = true
     const load = async () => {
@@ -93,6 +119,25 @@ export const Home: React.FC = () => {
       active = false
     }
   }, [])
+
+  const handleAdminSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const token = adminInput.trim()
+    if (token === '') {
+      setAdminMessage('Ingresa la clave de administrador para continuar.')
+      return
+    }
+    setAdminToken(token)
+    setAdminInput('')
+    setAdminMessage('Modo administrador activado.')
+    setShowAdminAccess(false)
+  }
+
+  const handleAdminLogout = () => {
+    setAdminToken(null)
+    setAdminMessage('Modo administrador desactivado.')
+    setShowAdminAccess(false)
+  }
 
   // Catálogo
   const PAGE_SIZE = 8
@@ -178,6 +223,12 @@ export const Home: React.FC = () => {
   const onUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
     if (files.length === 0) return
+    if (!isAdmin) {
+      setAdminMessage('Solo el administrador puede subir fotos o videos de reparaciones.')
+      setShowAdminAccess(true)
+      event.target.value = ''
+      return
+    }
     try {
       const processed = await Promise.all(
         files.map(async (file) => ({
@@ -191,6 +242,7 @@ export const Home: React.FC = () => {
         })),
       )
       setLocalRepMedia((prev) => [...processed, ...prev])
+      setAdminMessage(null)
     } catch (error) {
       console.error('Error al procesar archivos de reparaciones', error)
     } finally {
@@ -199,6 +251,11 @@ export const Home: React.FC = () => {
   }
 
   const removeLocalMedia = (id: string) => {
+    if (!isAdmin) {
+      setAdminMessage('Solo el administrador puede quitar elementos de la galería de reparaciones.')
+      setShowAdminAccess(true)
+      return
+    }
     setLocalRepMedia((prev) => prev.filter((item) => item.id !== id))
   }
 
@@ -256,6 +313,13 @@ export const Home: React.FC = () => {
       return
     }
 
+    if (!adminToken) {
+      setProductError('Debes iniciar sesión como administrador para registrar productos.')
+      setAdminMessage('Inicia sesión como administrador para gestionar el catálogo.')
+      setShowAdminAccess(true)
+      return
+    }
+
     setProductSaving(true)
     try {
       const nuevo = await crearProducto({
@@ -264,9 +328,10 @@ export const Home: React.FC = () => {
         categoria: productCategoria,
         precio: precioNumber,
         imagenUrl: productImagen,
-      })
+      }, adminToken)
       setRemoteProductos((prev) => [nuevo, ...prev])
       setProductosError(null)
+      setAdminMessage(null)
       closeNuevoProducto()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo guardar el producto'
@@ -277,11 +342,17 @@ export const Home: React.FC = () => {
   }
 
   const handleRemoveProducto = async (id: number) => {
+    if (!adminToken) {
+      setAdminMessage('Inicia sesión como administrador para eliminar productos del catálogo.')
+      setShowAdminAccess(true)
+      return
+    }
     const snapshot = remoteProductos.slice()
     setRemoteProductos((prev) => prev.filter((item) => item.id !== id))
     try {
-      await eliminarProducto(id)
+      await eliminarProducto(id, adminToken)
       setProductosError(null)
+      setAdminMessage(null)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo eliminar el producto'
       setProductosError(message)
@@ -392,16 +463,38 @@ export const Home: React.FC = () => {
               ))}
             </div>
             <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto md:items-center md:justify-end">
-              <button
-                onClick={() => setOpenNuevoProducto(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-50"
-              >
-                <Plus size={16} /> Agregar producto
-              </button>
+              {isAdmin ? (
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                  <button
+                    onClick={() => setOpenNuevoProducto(true)}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-50"
+                  >
+                    <Plus size={16} /> Agregar producto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAdminLogout}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-500 hover:bg-red-50"
+                  >
+                    <LogOut size={16} /> Cerrar sesión admin
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAdminAccess((prev) => !prev)
+                    setAdminMessage(null)
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-50"
+                >
+                  <ShieldCheck size={16} /> Soy administrador
+                </button>
+              )}
               <div className="relative w-full sm:w-64 md:w-80">
                 <input
                   type="search"
-                  placeholder="Buscar producto (nombre o descripci?n)"
+                  placeholder="Buscar producto (nombre o descripción)"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   className="w-full rounded-lg bg-white border border-gray-300 focus:border-green-600 outline-none px-4 py-2 text-neutral-800 placeholder:text-gray-400"
@@ -410,6 +503,46 @@ export const Home: React.FC = () => {
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"></span>
               </div>
             </div>
+            {!isAdmin && showAdminAccess && (
+              <form
+                onSubmit={handleAdminSubmit}
+                className="w-full md:w-auto mt-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-end"
+              >
+                <label className="flex w-full md:w-72 items-center gap-2 rounded-lg border border-green-300 bg-white px-3 py-2 text-sm text-green-700">
+                  <Lock size={16} className="text-green-600" />
+                  <input
+                    type="password"
+                    className="flex-1 bg-transparent text-sm text-neutral-800 placeholder:text-gray-400 outline-none"
+                    placeholder="Clave de administrador"
+                    value={adminInput}
+                    onChange={(event) => setAdminInput(event.target.value)}
+                    aria-label="Clave de administrador"
+                  />
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                  >
+                    Ingresar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAdminAccess(false)
+                      setAdminInput('')
+                      setAdminMessage(null)
+                    }}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            )}
+            {adminMessage && (
+              <p className={`mt-2 text-sm ${isAdmin ? 'text-green-700' : 'text-orange-600'}`}>{adminMessage}</p>
+            )}
           </div>
           <p className="mt-3 text-sm text-gray-700">
             {filtrados.length} resultado{filtrados.length !== 1 ? 's' : ''}{q && ` para "${q}"`}
@@ -438,7 +571,7 @@ export const Home: React.FC = () => {
                     key={p.id}
                     p={p}
                     onAdd={add}
-                    onRemove={p.origin === 'remote' ? handleRemoveProducto : undefined}
+                    onRemove={isAdmin && p.origin === 'remote' ? handleRemoveProducto : undefined}
                   />
                 ))}
               </div>
@@ -697,12 +830,18 @@ export const Home: React.FC = () => {
       </Modal>
 
       <Modal open={openReparaciones} onClose={() => setOpenReparaciones(false)} title="Galería de reparaciones">
-        <div className="mb-4 flex items-center gap-3">
-          <label className="inline-flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded-lg cursor-pointer font-semibold hover:bg-green-700">
-            Subir fotos/videos
-            <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={onUpload} />
-          </label>
-          <p className="text-xs text-gray-600">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+          {isAdmin ? (
+            <label className="inline-flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded-lg cursor-pointer font-semibold hover:bg-green-700">
+              Subir fotos/videos
+              <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={onUpload} />
+            </label>
+          ) : (
+            <div className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700">
+              <ShieldCheck size={16} /> Solo el administrador puede subir archivos.
+            </div>
+          )}
+          <p className="text-xs text-gray-600 sm:flex-1">
             Formatos: JPG/PNG/MP4. Se guardan en este navegador para que el administrador los gestione; no se suben al servidor.
           </p>
         </div>
