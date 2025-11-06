@@ -1,0 +1,7 @@
+import React,{createContext,useContext,useEffect,useMemo,useReducer} from 'react'
+export type Item={id:number;nombre:string;precio:number;cantidad:number}
+type Action={type:'add';item:Omit<Item,'cantidad'>}|{type:'qty';id:number;delta:number}|{type:'rm';id:number}|{type:'hydrate';payload:Item[]}
+const Ctx=createContext<{state:Item[];dispatch:React.Dispatch<Action>;total:number;count:number}|null>(null)
+const reducer=(s:Item[],a:Action):Item[]=>{switch(a.type){case'hydrate':return Array.isArray(a.payload)?a.payload:[];case'add':{const e=s.find(i=>i.id===a.item.id);return e?s.map(i=>i.id===a.item.id?{...i,cantidad:i.cantidad+1}:i):[...s,{...a.item,cantidad:1}]};case'qty':return s.map(i=>i.id===a.id?{...i,cantidad:Math.max(1,i.cantidad+a.delta)}:i);case'rm':return s.filter(i=>i.id!==a.id)}}
+export const CartProvider:React.FC<{children:React.ReactNode}>=({children})=>{const[state,dispatch]=useReducer(reducer,[] as Item[]);useEffect(()=>{try{const r=localStorage.getItem('cart_dc2');if(r)dispatch({type:'hydrate',payload:JSON.parse(r)})}catch{}},[]);useEffect(()=>{localStorage.setItem('cart_dc2',JSON.stringify(state))},[state]);const total=useMemo(()=>state.reduce((s,i)=>s+i.precio*i.cantidad,0),[state]);const count=useMemo(()=>state.reduce((s,i)=>s+i.cantidad,0),[state]);return <Ctx.Provider value={{state,dispatch,total,count}}>{children}</Ctx.Provider>}
+export const useCart=()=>{const c=useContext(Ctx);if(!c) throw new Error('useCart must be used within CartProvider');return c}

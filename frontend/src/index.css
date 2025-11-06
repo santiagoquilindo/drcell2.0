@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fondo y color de texto por defecto para toda la app */
+@layer base {
+  html, body, #root {
+    @apply h-full bg-white text-neutral-900;
+  }
+}
