@@ -55,7 +55,7 @@ export const ProductCard: React.FC<Props> = ({ p, onAdd, onRemove }) => {
             onClick={() => onRemove(p.id)}
             className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-lg border border-red-400 text-red-500 py-2 text-sm font-semibold hover:bg-red-50"
           >
-            Eliminar del catálogo
+            Eliminar del catalogo
           </button>
         )}
       </div>

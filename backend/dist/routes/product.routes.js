@@ -1,7 +1,28 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../config/database.js';
+import { env } from '../config/env.js';
 const router = Router();
+const extractToken = (req) => {
+    const apiKeyHeader = req.header('x-api-key');
+    if (apiKeyHeader)
+        return apiKeyHeader.trim();
+    const authHeader = req.header('authorization');
+    if (authHeader?.toLowerCase().startsWith('bearer ')) {
+        return authHeader.slice(7).trim();
+    }
+    return null;
+};
+const requireAdmin = (req, res, next) => {
+    if (!env.ADMIN_API_KEY) {
+        return res.status(500).json({ message: 'ADMIN_API_KEY not configured' });
+    }
+    const token = extractToken(req);
+    if (token !== env.ADMIN_API_KEY) {
+        return res.status(401).json({ message: 'Acceso no autorizado' });
+    }
+    next();
+};
 const imageSchema = z
     .string()
     .trim()
@@ -23,7 +44,7 @@ router.get('/', async (_req, res, next) => {
         next(error);
     }
 });
-router.post('/', async (req, res, next) => {
+router.post('/', requireAdmin, async (req, res, next) => {
     try {
         const data = productSchema.parse(req.body);
         const result = await pool.query(`
@@ -37,7 +58,7 @@ router.post('/', async (req, res, next) => {
         next(error);
     }
 });
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requireAdmin, async (req, res, next) => {
     try {
         const id = Number(req.params.id);
         if (!Number.isInteger(id)) {

@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 
 import { pool } from '../config/database.js'
+import { requireAdmin } from '../middleware/requireAdmin.js'
 
 const router = Router()
 
@@ -33,7 +34,7 @@ router.get('/', async (_req, res, next) => {
   }
 })
 
-router.post('/', async (req, res, next) => {
+router.post('/', requireAdmin, async (req, res, next) => {
   try {
     const data = productSchema.parse(req.body)
     const result = await pool.query(
@@ -50,7 +51,7 @@ router.post('/', async (req, res, next) => {
   }
 })
 
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requireAdmin, async (req, res, next) => {
   try {
     const id = Number(req.params.id)
     if (!Number.isInteger(id)) {
