@@ -8,6 +8,13 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   DATABASE_URL: z.string().url(),
   ADMIN_API_KEY: z.string().min(8).optional(),
+  BUSINESS_NAME: z.string().min(3).default('drcell 2.0'),
+  BUSINESS_TRADE_NAME: z.string().optional(),
+  BUSINESS_TAX_ID: z.string().optional(),
+  BUSINESS_ADDRESS: z.string().optional(),
+  BUSINESS_PHONE: z.string().optional(),
+  BUSINESS_EMAIL: z.string().email().optional(),
+  OPENAI_API_KEY: z.string().optional(),
 })
 
 const parsed = envSchema.safeParse(process.env)

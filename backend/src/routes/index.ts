@@ -1,14 +1,24 @@
 import { Router } from 'express'
 
+import assistantRoutes from './assistant.routes.js'
+import clientsRoutes from './clients.routes.js'
 import inventoryRoutes from './inventory.routes.js'
+import invoicesRoutes from './invoices.routes.js'
 import productRoutes from './product.routes.js'
 import providersRoutes from './providers.routes.js'
+import repairsRoutes from './repairs.routes.js'
+import returnsRoutes from './returns.routes.js'
 
 const router = Router()
 
 router.use('/products', productRoutes)
+router.use('/clients', clientsRoutes)
 router.use('/inventory', inventoryRoutes)
+router.use('/invoices', invoicesRoutes)
 router.use('/providers', providersRoutes)
+router.use('/repairs', repairsRoutes)
+router.use('/returns', returnsRoutes)
+router.use('/assistant', assistantRoutes)
 
 router.get('/health', (_req, res) => {
   res.json({ status: 'ok' })

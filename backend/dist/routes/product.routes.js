@@ -1,28 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../config/database.js';
-import { env } from '../config/env.js';
+import { requireAdmin } from '../middleware/requireAdmin.js';
 const router = Router();
-const extractToken = (req) => {
-    const apiKeyHeader = req.header('x-api-key');
-    if (apiKeyHeader)
-        return apiKeyHeader.trim();
-    const authHeader = req.header('authorization');
-    if (authHeader?.toLowerCase().startsWith('bearer ')) {
-        return authHeader.slice(7).trim();
-    }
-    return null;
-};
-const requireAdmin = (req, res, next) => {
-    if (!env.ADMIN_API_KEY) {
-        return res.status(500).json({ message: 'ADMIN_API_KEY not configured' });
-    }
-    const token = extractToken(req);
-    if (token !== env.ADMIN_API_KEY) {
-        return res.status(401).json({ message: 'Acceso no autorizado' });
-    }
-    next();
-};
 const imageSchema = z
     .string()
     .trim()

@@ -1,4 +1,5 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Header } from '@components/Header'
 import { Footer } from '@components/Footer'
 import { Modal } from '@components/Modal'
@@ -13,6 +14,7 @@ import {
   type InventoryItem,
   type InventoryProvider,
 } from '@modules/inventory'
+import type { DiagnosticResponse } from '@modules/assistant'
 import { ProductCard } from '@components/ProductCard'
 import { useCart } from '@context/cart'
 import {
@@ -26,6 +28,7 @@ import {
   fetchInventoryAlerts,
   fetchProductos,
   fetchProviders,
+  requestDiagnosticAssistant,
   setAdminToken as setApiAdminToken,
   updateInventoryItem,
 } from '@utils/api'
@@ -36,6 +39,9 @@ import {
   BellRing,
   CreditCard,
   Factory,
+  FileText,
+  RotateCcw,
+  Wrench,
   Images,
   MapPin,
   Minus,
@@ -87,6 +93,7 @@ const createProviderFormState = () => ({
 })
 
 export const Home: React.FC = () => {
+  const navigate = useNavigate()
   const { state: carrito, dispatch, total } = useCart()
   const [showCart, setShowCart] = React.useState(false)
 
@@ -100,9 +107,18 @@ export const Home: React.FC = () => {
   const [openGarantias, setOpenGarantias] = React.useState(false)
 
   // Modales de cotización (solo flags)
-  const [openCotizarRep, setOpenCotizarRep] = React.useState(false)
-  const [openCotizarCompra, setOpenCotizarCompra] = React.useState(false)
-  const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
+const [openCotizarRep, setOpenCotizarRep] = React.useState(false)
+const [openCotizarCompra, setOpenCotizarCompra] = React.useState(false)
+const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
+  const [assistantForm, setAssistantForm] = React.useState({
+    dispositivo: '',
+    motivo: '',
+    descripcion: '',
+    contacto: '',
+  })
+  const [assistantResult, setAssistantResult] = React.useState<DiagnosticResponse | null>(null)
+  const [assistantLoading, setAssistantLoading] = React.useState(false)
+  const [assistantError, setAssistantError] = React.useState<string | null>(null)
 
   // Catálogo administrable
   const [remoteProductos, setRemoteProductos] = React.useState<Producto[]>([])
@@ -368,6 +384,28 @@ export const Home: React.FC = () => {
   )
 
   const [activeCard, setActiveCard] = React.useState<number | null>(null)
+  const handleAssistantSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!assistantForm.motivo.trim() || !assistantForm.descripcion.trim()) {
+      setAssistantError('Cuéntanos el problema con un poco más de detalle.')
+      return
+    }
+    try {
+      setAssistantLoading(true)
+      setAssistantError(null)
+      const response = await requestDiagnosticAssistant({
+        dispositivo: assistantForm.dispositivo || undefined,
+        motivo: assistantForm.motivo,
+        descripcion: assistantForm.descripcion,
+        contacto: assistantForm.contacto || undefined,
+      })
+      setAssistantResult(response)
+    } catch (error) {
+      setAssistantError(error instanceof Error ? error.message : 'No pudimos consultar el asistente ahora.')
+    } finally {
+      setAssistantLoading(false)
+    }
+  }
 
   const serviceCards = [
     {
@@ -869,6 +907,93 @@ export const Home: React.FC = () => {
           </div>
         </section>
 
+        {/* Asistente IA */}
+        <section className="mb-8 grid gap-6 rounded-2xl border border-green-200 bg-white p-6 shadow-lg shadow-green-100 md:grid-cols-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-green-600">Asistente IA</p>
+            <h2 className="text-2xl font-bold text-slate-900">¿Tienes un problema con tu equipo?</h2>
+            <p className="text-sm text-slate-600 mb-4">
+              Describe los síntomas y nuestro asistente te dará una orientación inicial basada en casos reales. La revisión final se
+              confirma en el laboratorio.
+            </p>
+            <form className="space-y-3" onSubmit={handleAssistantSubmit}>
+              <input
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Marca y modelo (opcional)"
+                value={assistantForm.dispositivo}
+                onChange={(event) => setAssistantForm((prev) => ({ ...prev, dispositivo: event.target.value }))}
+              />
+              <input
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="¿Qué sucede? (ej. no enciende, pantalla rota)"
+                value={assistantForm.motivo}
+                onChange={(event) => setAssistantForm((prev) => ({ ...prev, motivo: event.target.value }))}
+              />
+              <textarea
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                rows={3}
+                placeholder="Cuéntanos los detalles (cuándo pasó, si se mojó, etc.)"
+                value={assistantForm.descripcion}
+                onChange={(event) => setAssistantForm((prev) => ({ ...prev, descripcion: event.target.value }))}
+              />
+              <input
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                placeholder="Tu correo o WhatsApp (opcional)"
+                value={assistantForm.contacto}
+                onChange={(event) => setAssistantForm((prev) => ({ ...prev, contacto: event.target.value }))}
+              />
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                disabled={assistantLoading}
+              >
+                {assistantLoading ? 'Analizando...' : 'Consultar asistente'}
+              </button>
+              {assistantError && <p className="text-sm text-red-600">{assistantError}</p>}
+            </form>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            {assistantResult ? (
+              <div className="space-y-3 text-sm text-slate-700">
+                <p className="text-xs font-semibold text-slate-500 uppercase">Resumen</p>
+                <p>{assistantResult.resumen}</p>
+                {assistantResult.probables_causas.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase">Causas probables</p>
+                    <ul className="list-disc pl-4">
+                      {assistantResult.probables_causas.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {assistantResult.siguientes_pasos.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase">Siguientes pasos</p>
+                    <ul className="list-disc pl-4">
+                      {assistantResult.siguientes_pasos.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <p className="text-xs text-slate-500">
+                  Urgencia sugerida:{' '}
+                  <span className="font-semibold text-slate-900">{assistantResult.urgencia.toUpperCase()}</span>
+                </p>
+                <p className="text-xs text-slate-500">{assistantResult.nota_garantia}</p>
+              </div>
+            ) : (
+              <div className="text-sm text-slate-600">
+                <p>
+                  Recibirás una orientación inmediata sobre la posible causa. Luego podremos agendar tu visita o recogida a domicilio.
+                </p>
+                <p className="mt-3 text-xs text-slate-500">* Servicio informativo, la evaluación definitiva se realiza en el laboratorio.</p>
+              </div>
+            )}
+          </div>
+        </section>
+
         {isAdmin && (
           <>
             {/* Inventario administrable */}
@@ -902,6 +1027,33 @@ export const Home: React.FC = () => {
                 <Factory size={16} />
                 Registrar proveedor
               </button>
+              {isAdmin && (
+                <button
+                  onClick={() => navigate('/admin/facturacion')}
+                  className="inline-flex items-center gap-2 rounded-full border border-green-400 px-4 py-2 text-sm font-semibold text-green-700 hover:border-green-500"
+                >
+                  <FileText size={16} />
+                  Facturación / cotizaciones
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  onClick={() => navigate('/admin/reparaciones')}
+                  className="inline-flex items-center gap-2 rounded-full border border-green-400 px-4 py-2 text-sm font-semibold text-green-700 hover:border-green-500"
+                >
+                  <Wrench size={16} />
+                  Reparaciones
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  onClick={() => navigate('/admin/devoluciones')}
+                  className="inline-flex items-center gap-2 rounded-full border border-green-400 px-4 py-2 text-sm font-semibold text-green-700 hover:border-green-500"
+                >
+                  <RotateCcw size={16} />
+                  Devoluciones
+                </button>
+              )}
             </div>
           </div>
 
