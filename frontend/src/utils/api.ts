@@ -520,12 +520,22 @@ export async function downloadRepairSticker(id: number): Promise<Blob> {
   return res.blob()
 }
 
-export async function fetchPublicRepairStatus(code: string): Promise<PublicRepairStatus> {
-  const formatted = code.trim()
-  if (!formatted) {
-    throw new Error('Ingresa un codigo de reparacion')
+export async function fetchPublicRepairStatus(input: {
+  code: string
+  nombre: string
+  documento: string
+}): Promise<PublicRepairStatus> {
+  const formatted = input.code.trim()
+  const nombre = input.nombre.trim()
+  const documento = input.documento.trim()
+  if (!formatted || !nombre || !documento) {
+    throw new Error('Completa los datos solicitados')
   }
-  const res = await fetch(`${API_BASE_URL}/repairs/public/${encodeURIComponent(formatted)}`)
+  const res = await fetch(`${API_BASE_URL}/repairs/public/status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: formatted, nombre, documento }),
+  })
   if (!res.ok) {
     const message = await parseErrorResponse(res, 'No encontramos la reparacion')
     throw new Error(message)

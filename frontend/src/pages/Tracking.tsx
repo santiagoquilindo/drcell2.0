@@ -17,41 +17,48 @@ export const Tracking: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialTicket = searchParams.get('ticket') ?? ''
   const [ticket, setTicket] = React.useState(initialTicket)
+  const [customerName, setCustomerName] = React.useState('')
+  const [customerDocument, setCustomerDocument] = React.useState('')
+  const [lastQuery, setLastQuery] = React.useState<{ code: string; nombre: string; documento: string } | null>(null)
   const [status, setStatus] = React.useState<PublicRepairStatus | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
-  const queryStatus = React.useCallback(async (code: string) => {
-    const normalized = code.trim().toUpperCase()
-    if (!normalized) {
-      setError('Ingresa el codigo de tu reparacion')
-      setStatus(null)
-      return
-    }
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await fetchPublicRepairStatus(normalized)
-      setStatus(data)
-      setTicket(normalized)
-      setSearchParams({ ticket: normalized })
-    } catch (err) {
-      setStatus(null)
-      setError(err instanceof Error ? err.message : 'No pudimos consultar el estado')
-    } finally {
-      setLoading(false)
-    }
-  }, [setSearchParams])
-
-  React.useEffect(() => {
-    if (initialTicket) {
-      queryStatus(initialTicket).catch(() => {})
-    }
-  }, [initialTicket, queryStatus])
+  const queryStatus = React.useCallback(
+    async (payload: { code: string; nombre: string; documento: string }) => {
+      const normalizedCode = payload.code.trim().toUpperCase()
+      const normalizedName = payload.nombre.trim()
+      const normalizedDocument = payload.documento.trim()
+      if (!normalizedCode || !normalizedName || !normalizedDocument) {
+        setError('Ingresa el codigo, tu nombre y numero de documento')
+        setStatus(null)
+        return
+      }
+      try {
+        setLoading(true)
+        setError(null)
+        const data = await fetchPublicRepairStatus({
+          code: normalizedCode,
+          nombre: normalizedName,
+          documento: normalizedDocument,
+        })
+        setStatus(data)
+        setTicket(normalizedCode)
+        setLastQuery({ code: normalizedCode, nombre: normalizedName, documento: normalizedDocument })
+        setSearchParams({ ticket: normalizedCode })
+      } catch (err) {
+        setStatus(null)
+        setError(err instanceof Error ? err.message : 'No pudimos consultar el estado')
+      } finally {
+        setLoading(false)
+      }
+    },
+    [setSearchParams],
+  )
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
-    queryStatus(ticket).catch(() => {})
+    queryStatus({ code: ticket, nombre: customerName, documento: customerDocument }).catch(() => {})
   }
 
   return (
@@ -67,9 +74,20 @@ export const Tracking: React.FC = () => {
           </Link>
           <button
             type="button"
-            onClick={() => (status ? queryStatus(status.codigo).catch(() => {}) : queryStatus(ticket).catch(() => {}))}
+            onClick={() => {
+              const payload =
+                lastQuery ?? {
+                  code: ticket,
+                  nombre: customerName,
+                  documento: customerDocument,
+                }
+              queryStatus(payload).catch(() => {})
+            }}
             className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-white"
-            disabled={loading || (!ticket && !status)}
+            disabled={
+              loading ||
+              (!lastQuery && (!ticket.trim() || !customerName.trim() || !customerDocument.trim()))
+            }
           >
             <RefreshCcw size={12} />
             Actualizar
@@ -80,27 +98,49 @@ export const Tracking: React.FC = () => {
           <p className="text-sm font-semibold text-green-700 uppercase tracking-wide">Seguimiento online</p>
           <h1 className="text-3xl font-bold text-slate-900">Estado de tu reparacion</h1>
           <p className="text-slate-600 text-sm">
-            Ingresa el codigo impreso en tu sticker o factura para consultar avances y el historial registrado por
-            nuestro laboratorio.
+            Ingresa el codigo impreso en tu sticker junto con el nombre y documento del titular para consultar avances
+            y el historial registrado por nuestro laboratorio.
           </p>
         </header>
 
         <form
           onSubmit={handleSubmit}
-          className="flex flex-col gap-3 rounded-2xl bg-white p-5 shadow-sm border border-slate-100 md:flex-row"
+          className="space-y-3 rounded-2xl bg-white p-5 shadow-sm border border-slate-100"
         >
-          <div className="flex-1">
-            <label className="text-xs font-semibold text-slate-600 block mb-1">Codigo de reparacion</label>
-            <input
-              value={ticket}
-              onChange={(event) => setTicket(event.target.value.toUpperCase())}
-              placeholder="Ej: RPR-20250215-0007"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono tracking-wide uppercase focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="text-xs font-semibold text-slate-600 block">
+              Codigo de reparacion
+              <input
+                value={ticket}
+                onChange={(event) => setTicket(event.target.value.toUpperCase())}
+                placeholder="Ej: RPR-20250215-0007"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono tracking-wide uppercase focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </label>
+
+            <label className="text-xs font-semibold text-slate-600 block">
+              Nombre del titular
+              <input
+                value={customerName}
+                onChange={(event) => setCustomerName(event.target.value)}
+                placeholder="Ej: Maria Perez"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </label>
+
+            <label className="text-xs font-semibold text-slate-600 block">
+              Documento del titular
+              <input
+                value={customerDocument}
+                onChange={(event) => setCustomerDocument(event.target.value)}
+                placeholder="Ej: 123456789"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </label>
           </div>
           <button
             type="submit"
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-5 py-2 text-white font-semibold hover:bg-green-700 disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-5 py-2 text-white font-semibold hover:bg-green-700 disabled:opacity-60 md:w-auto"
             disabled={loading}
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
