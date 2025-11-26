@@ -81,6 +81,23 @@ export type RepairUpdate = {
   createdAt: string
 }
 
+export type PublicRepairStatus = {
+  codigo: string
+  estado: RepairStatus
+  dispositivo?: string | null
+  motivoIngreso?: string | null
+  diagnostico?: string | null
+  accesorios?: string | null
+  createdAt: string
+  updatedAt: string
+  cliente: {
+    nombre: string
+    telefono?: string | null
+    email?: string | null
+  }
+  updates: RepairUpdate[]
+}
+
 export type RepairInput = {
   clientId?: number
   client?: {

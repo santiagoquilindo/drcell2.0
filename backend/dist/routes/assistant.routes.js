@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../config/database.js';
-import { env } from '../config/env.js';
 import { generateDiagnosticSuggestion } from '../lib/diagnosticAssistant.js';
 const router = Router();
 const requestSchema = z.object({
@@ -12,9 +11,6 @@ const requestSchema = z.object({
     nombre: z.string().optional(),
 });
 router.post('/diagnostic', async (req, res, next) => {
-    if (!env.OPENAI_API_KEY) {
-        return res.status(503).json({ message: 'El asistente no está disponible en este momento' });
-    }
     try {
         const data = requestSchema.parse(req.body);
         const similares = await fetchSimilarCases(data.dispositivo, data.motivo);

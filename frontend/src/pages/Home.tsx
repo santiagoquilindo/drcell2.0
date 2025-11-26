@@ -18,6 +18,7 @@ import type { DiagnosticResponse } from '@modules/assistant'
 import { ProductCard } from '@components/ProductCard'
 import { useCart } from '@context/cart'
 import {
+  actualizarProducto,
   clearAdminToken as clearApiAdminToken,
   crearProducto,
   createInventoryItem,
@@ -92,10 +93,15 @@ const createProviderFormState = () => ({
   notas: '',
 })
 
-export const Home: React.FC = () => {
+type HomeProps = {
+  variant?: 'public' | 'admin'
+}
+
+export const Home: React.FC<HomeProps> = ({ variant = 'public' }) => {
   const navigate = useNavigate()
   const { state: carrito, dispatch, total } = useCart()
   const [showCart, setShowCart] = React.useState(false)
+  const allowAdmin = variant === 'admin'
 
   // Modales base
   const [openUbicacion, setOpenUbicacion] = React.useState(false)
@@ -142,9 +148,11 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
   const [productImagenNombre, setProductImagenNombre] = React.useState<string | undefined>(undefined)
   const [productError, setProductError] = React.useState<string | null>(null)
   const [productSaving, setProductSaving] = React.useState(false)
+  const [editingProductInfo, setEditingProductInfo] = React.useState<{ id: number | null; origin: Producto['origin'] } | null>(null)
+  const isEditingProduct = editingProductInfo !== null
 
   const [adminToken, setAdminTokenState] = React.useState<string | null>(null)
-  const isAdmin = Boolean(adminToken)
+  const isAdmin = allowAdmin && Boolean(adminToken)
   const [openAdminModal, setOpenAdminModal] = React.useState(false)
   const [adminKeyInput, setAdminKeyInput] = React.useState('')
   const [adminError, setAdminError] = React.useState<string | null>(null)
@@ -168,12 +176,17 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
   const [providerForm, setProviderForm] = React.useState(createProviderFormState)
 
   React.useEffect(() => {
+    if (!allowAdmin) {
+      setAdminTokenState(null)
+      clearApiAdminToken()
+      return
+    }
     const stored = localStorage.getItem(ADMIN_STORAGE_KEY)
     if (stored) {
       setAdminTokenState(stored)
       setApiAdminToken(stored)
     }
-  }, [])
+  }, [allowAdmin])
 
   React.useEffect(() => {
     let active = true
@@ -185,7 +198,7 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
         setProductosError(null)
       } catch (error) {
         if (!active) return
-        const message = error instanceof Error ? error.message : 'No se pudo obtener el catalogo'
+        const message = error instanceof Error ? error.message : 'No se pudo obtener el catálogo'
         setProductosError(message)
       } finally {
         if (!active) return
@@ -315,12 +328,34 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
     setProductImagen(undefined)
     setProductImagenNombre(undefined)
     setProductError(null)
+    setEditingProductInfo(null)
   }
 
   const closeNuevoProducto = () => {
     setOpenNuevoProducto(false)
     setProductSaving(false)
     resetProductForm()
+  }
+
+  const openProductModalForCreate = () => {
+    resetProductForm()
+    setOpenNuevoProducto(true)
+  }
+
+  const openProductModalForEdit = (product: Producto) => {
+    if (!isAdmin) {
+      setOpenAdminModal(true)
+      return
+    }
+    setEditingProductInfo({ id: product.origin === 'remote' ? product.id : null, origin: product.origin })
+    setProductNombre(product.nombre)
+    setProductDescripcion(product.descripcion ?? '')
+    setProductCategoria(product.categoria)
+    setProductPrecio(String(product.precio))
+    setProductImagen(product.imagenUrl)
+    setProductImagenNombre(product.imagenUrl ? 'Imagen actual' : undefined)
+    setProductError(null)
+    setOpenNuevoProducto(true)
   }
 
   const closeAdminModal = () => {
@@ -330,6 +365,10 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
   }
 
   const handleAdminLogin = () => {
+    if (!allowAdmin) {
+      navigate('/admin')
+      return
+    }
     const value = adminKeyInput.trim()
     if (value === '') {
       setAdminError('Ingresa la clave de administrador.')
@@ -361,15 +400,20 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
     setInventorySearchInput('')
     setAppliedInventorySearch('')
     setInventoryFilter('todos')
+    setEditingProductInfo(null)
   }, [])
 
   const handleAdminAccess = React.useCallback(() => {
+    if (!allowAdmin) {
+      navigate('/admin')
+      return
+    }
     if (isAdmin) {
       handleAdminLogout()
     } else {
       setOpenAdminModal(true)
     }
-  }, [isAdmin, handleAdminLogout])
+  }, [allowAdmin, handleAdminLogout, isAdmin, navigate])
 
   const handleProtectedActionError = React.useCallback(
     (message: string) => {
@@ -776,20 +820,32 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
       return
     }
 
+    const payload = {
+      nombre,
+      descripcion,
+      categoria: productCategoria,
+      precio: precioNumber,
+      imagenUrl: productImagen,
+    }
+
     setProductSaving(true)
     try {
-      const nuevo = await crearProducto({
-        nombre,
-        descripcion,
-        categoria: productCategoria,
-        precio: precioNumber,
-        imagenUrl: productImagen,
-      })
-      setRemoteProductos((prev) => [nuevo, ...prev])
+      const editingInfo = editingProductInfo
+      if (editingInfo && editingInfo.origin === 'remote' && editingInfo.id !== null) {
+        const actualizado = await actualizarProducto(editingInfo.id, payload)
+        setRemoteProductos((prev) => prev.map((item) => (item.id === editingInfo.id ? actualizado : item)))
+      } else {
+        const nuevo = await crearProducto(payload)
+        setRemoteProductos((prev) => [nuevo, ...prev])
+      }
       setProductosError(null)
       closeNuevoProducto()
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No se pudo guardar el producto'
+      const fallback =
+        editingProductInfo && editingProductInfo.origin === 'remote'
+          ? 'No se pudo actualizar el producto'
+          : 'No se pudo guardar el producto'
+      const message = error instanceof Error ? error.message : fallback
       setProductError(message)
       handleProtectedActionError(message)
     } finally {
@@ -810,15 +866,15 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
       setProductosError(null)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo eliminar el producto'
-        setProductosError(message)
-        setRemoteProductos(snapshot)
-        if (message.toLowerCase().includes('no autorizado') || message.toLowerCase().includes('restringido')) {
-          handleAdminLogout()
-          setAdminError('Clave incorrecta. Intenta de nuevo.')
-          setOpenAdminModal(true)
-        }
+      setProductosError(message)
+      setRemoteProductos(snapshot)
+      if (message.toLowerCase().includes('no autorizado') || message.toLowerCase().includes('restringido')) {
+        handleAdminLogout()
+        setAdminError('Clave incorrecta. Intenta de nuevo.')
+        setOpenAdminModal(true)
       }
     }
+  }
 
   // Carrito
   const add = (p: Producto) =>
@@ -859,7 +915,7 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
         {/* Servicios */}
         <section className="bg-white border border-green-300 rounded-2xl shadow-lg shadow-green-200 p-6 mb-8">
           <h2 className="text-2xl font-bold text-green-700 mb-4">Nuestros Servicios</h2>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {serviceCards.map((card, index) => (
               <article
                 key={card.id}
@@ -908,7 +964,7 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
         </section>
 
         {/* Asistente IA */}
-        <section className="mb-8 grid gap-6 rounded-2xl border border-green-200 bg-white p-6 shadow-lg shadow-green-100 md:grid-cols-2">
+        <section className="mb-8 grid grid-cols-1 gap-6 rounded-2xl border border-green-200 bg-white p-6 shadow-lg shadow-green-100 md:grid-cols-2">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-green-600">Asistente IA</p>
             <h2 className="text-2xl font-bold text-slate-900">¿Tienes un problema con tu equipo?</h2>
@@ -1057,7 +1113,7 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
             </div>
           </div>
 
-            <div className="mt-6 grid gap-6 lg:grid-cols-[3fr,1.15fr]">
+            <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[3fr,1.15fr]">
               <div className="space-y-4">
                 <form onSubmit={handleInventorySearchSubmit} className="flex flex-col gap-3 lg:flex-row lg:items-center">
                   <div className="relative flex-1">
@@ -1205,7 +1261,7 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
               </div>
 
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="rounded-2xl border border-green-200 bg-white p-4 shadow-sm">
                     <p className="text-xs uppercase text-green-600">Referencias</p>
                     <p className="text-2xl font-bold text-green-800">{inventoryStats.totalItems}</p>
@@ -1314,7 +1370,7 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
               </div>
               {isAdmin && (
                 <button
-                  onClick={() => setOpenNuevoProducto(true)}
+                  onClick={openProductModalForCreate}
                   className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-300 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-50"
                 >
                   <Plus size={16} /> Agregar producto
@@ -1327,7 +1383,7 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
             {categoria !== 'todos' && ` en ${categoria}`}
           </p>
           {productosLoading && (
-            <p className="mt-2 text-sm text-gray-500">Cargando catalogo...</p>
+            <p className="mt-2 text-sm text-gray-500">Cargando catálogo...</p>
           )}
           {productosError && (
             <p className="mt-2 text-sm text-red-500">{productosError}</p>
@@ -1343,19 +1399,20 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
             </div>
           ) : (
             <>
-              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
                 {visibles.map((p) => (
                   <ProductCard
                     key={p.id}
                     p={p}
                     onAdd={add}
                     onRemove={isAdmin && p.origin === 'remote' ? handleRemoveProducto : undefined}
+                    onEdit={isAdmin ? openProductModalForEdit : undefined}
                   />
                 ))}
               </div>
 
               {pages > 1 && (
-                <nav className="mt-8 flex items-center justify-center gap-2" aria-label="Paginación del catalogo">
+                <nav className="mt-8 flex items-center justify-center gap-2" aria-label="Paginación del catálogo">
                   <button onClick={() => go(page - 1)} className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:border-green-600" disabled={page === 1}>
                     Anterior
                   </button>
@@ -1473,7 +1530,7 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
       />
 
       {/* Modales base */}
-      <Modal open={openUbicacion} onClose={() => setOpenUbicacion(false)} title="Ubicación – Local 4 (Doctor Cell 2.0)">
+      <Modal open={openUbicacion} onClose={() => setOpenUbicacion(false)} title="Ubicación – Local 4 (Dr Cell)">
         <ImageWithFallback
           src="https://images.unsplash.com/photo-1563298723-dcfebaa392e3?q=80&w=1600&auto=format&fit=crop"
           alt="Foto del local"
@@ -1493,119 +1550,125 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
         <p className="text-xs text-gray-600 mt-3">Credito sujeto a aprobación de la entidad aliada.</p>
       </Modal>
 
-      <Modal open={openNuevoProducto} onClose={closeNuevoProducto} title="Agregar producto al catalogo">
-        <div className="space-y-3">
-          {productError && <p className="text-sm text-red-500">{productError}</p>}
-
-          <label className="text-sm">
-            <span className="block mb-1 text-gray-700">Nombre</span>
-            <input
-              className="w-full rounded border border-gray-300 px-3 py-2 focus:border-green-600 outline-none"
-              placeholder="Ej: Moto G 5G, iPhone 11..."
-              value={productNombre}
-              onChange={(e) => {
-                setProductNombre(e.target.value)
-                setProductError(null)
-              }}
-            />
-          </label>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="text-sm">
-              <span className="block mb-1 text-gray-700">Categoría</span>
-              <select
-                className="w-full rounded border border-gray-300 px-3 py-2"
-                value={productCategoria}
-                onChange={(e) => {
-                  setProductCategoria(e.target.value as CategoriaProducto)
-                  setProductError(null)
-                }}
-              >
-                {CATS.filter((c) => c.id !== 'todos').map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre}
-                  </option>
-                ))}
-              </select>
-            </label>
+      {allowAdmin && isAdmin && (
+        <Modal
+          open={openNuevoProducto}
+          onClose={closeNuevoProducto}
+          title={isEditingProduct ? 'Editar producto del catálogo' : 'Agregar producto al catálogo'}
+        >
+          <div className="space-y-3">
+            {productError && <p className="text-sm text-red-500">{productError}</p>}
 
             <label className="text-sm">
-              <span className="block mb-1 text-gray-700">Precio (COP)</span>
+              <span className="block mb-1 text-gray-700">Nombre</span>
               <input
-                type="number"
-                min={0}
-                className="w-full rounded border border-gray-300 px-3 py-2"
-                placeholder="Ej: 1250000"
-                value={productPrecio}
+                className="w-full rounded border border-gray-300 px-3 py-2 focus:border-green-600 outline-none"
+                placeholder="Ej: Moto G 5G, iPhone 11..."
+                value={productNombre}
                 onChange={(e) => {
-                  setProductPrecio(e.target.value)
+                  setProductNombre(e.target.value)
                   setProductError(null)
                 }}
               />
             </label>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="text-sm">
+                <span className="block mb-1 text-gray-700">Categoría</span>
+                <select
+                  className="w-full rounded border border-gray-300 px-3 py-2"
+                  value={productCategoria}
+                  onChange={(e) => {
+                    setProductCategoria(e.target.value as CategoriaProducto)
+                    setProductError(null)
+                  }}
+                >
+                  {CATS.filter((c) => c.id !== 'todos').map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm">
+                <span className="block mb-1 text-gray-700">Precio (COP)</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full rounded border border-gray-300 px-3 py-2"
+                  placeholder="Ej: 1250000"
+                  value={productPrecio}
+                  onChange={(e) => {
+                    setProductPrecio(e.target.value)
+                    setProductError(null)
+                  }}
+                />
+              </label>
+            </div>
+
+            <label className="text-sm">
+              <span className="block mb-1 text-gray-700">Descripción</span>
+              <textarea
+                className="w-full rounded border border-gray-300 px-3 py-2"
+                rows={3}
+                placeholder="Capacidad, estado, accesorios incluidos..."
+                value={productDescripcion}
+                onChange={(e) => {
+                  setProductDescripcion(e.target.value)
+                  setProductError(null)
+                }}
+              />
+            </label>
+
+            <label className="text-sm">
+              <span className="block mb-1 text-gray-700">Imagen (opcional)</span>
+              <input type="file" accept="image/*" onChange={onProductImageChange} />
+              {productImagen && (
+                <div className="mt-2 flex items-center gap-3">
+                  <img
+                    src={productImagen}
+                    alt={productNombre || 'Nuevo producto'}
+                    className="h-20 w-20 rounded-lg border border-green-200 object-cover"
+                  />
+                  <div className="text-xs text-gray-600">
+                    <p>{productImagenNombre}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProductImagen(undefined)
+                        setProductImagenNombre(undefined)
+                        setProductError(null)
+                      }}
+                      className="mt-1 text-red-500 hover:text-red-600 font-semibold"
+                    >
+                      Quitar imagen
+                    </button>
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                La imagen se enviará al servidor codificada en base64.
+              </p>
+            </label>
           </div>
 
-          <label className="text-sm">
-            <span className="block mb-1 text-gray-700">Descripción</span>
-            <textarea
-              className="w-full rounded border border-gray-300 px-3 py-2"
-              rows={3}
-              placeholder="Capacidad, estado, accesorios incluidos..."
-              value={productDescripcion}
-              onChange={(e) => {
-                setProductDescripcion(e.target.value)
-                setProductError(null)
-              }}
-            />
-          </label>
-
-          <label className="text-sm">
-            <span className="block mb-1 text-gray-700">Imagen (opcional)</span>
-            <input type="file" accept="image/*" onChange={onProductImageChange} />
-            {productImagen && (
-              <div className="mt-2 flex items-center gap-3">
-                <img
-                  src={productImagen}
-                  alt={productNombre || 'Nuevo producto'}
-                  className="h-20 w-20 rounded-lg border border-green-200 object-cover"
-                />
-                <div className="text-xs text-gray-600">
-                  <p>{productImagenNombre}</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProductImagen(undefined)
-                      setProductImagenNombre(undefined)
-                      setProductError(null)
-                    }}
-                    className="mt-1 text-red-500 hover:text-red-600 font-semibold"
-                  >
-                    Quitar imagen
-                  </button>
-                </div>
-              </div>
-            )}
-            <p className="text-xs text-gray-500 mt-1">
-              La imagen se enviará al servidor codificada en base64.
-            </p>
-          </label>
-        </div>
-
-        <div className="mt-4 flex justify-end gap-2">
-          <button onClick={closeNuevoProducto} className="rounded-lg border px-4 py-2">
-            Cancelar
-          </button>
-          <button
-            onClick={guardarNuevoProducto}
-            disabled={productSaving}
-            className={`rounded-lg bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700 ${
-              productSaving ? 'opacity-60 cursor-not-allowed' : ''
-            }`}
-          >
-            {productSaving ? 'Guardando...' : 'Guardar producto'}
-          </button>
-        </div>
-      </Modal>
+          <div className="mt-4 flex justify-end gap-2">
+            <button onClick={closeNuevoProducto} className="rounded-lg border px-4 py-2">
+              Cancelar
+            </button>
+            <button
+              onClick={guardarNuevoProducto}
+              disabled={productSaving}
+              className={`rounded-lg bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700 ${
+                productSaving ? 'opacity-60 cursor-not-allowed' : ''
+              }`}
+            >
+              {productSaving ? 'Guardando...' : isEditingProduct ? 'Actualizar producto' : 'Guardar producto'}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {isAdmin && (
         <Modal
@@ -1814,40 +1877,42 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
         </Modal>
       )}
 
-      <Modal open={openAdminModal} onClose={closeAdminModal} title="Acceso administrador">
-        <div className="space-y-3">
-          {adminError && <p className="text-sm text-red-500">{adminError}</p>}
-          <label className="text-sm">
-            <span className="block mb-1 text-gray-700">Clave de administrador</span>
-            <input
-              type="password"
-              className="w-full rounded border border-gray-300 px-3 py-2 focus:border-green-600 outline-none"
-              placeholder="Ingresa la clave definida en el backend"
-              value={adminKeyInput}
-              onChange={(e) => {
-                setAdminKeyInput(e.target.value)
-                setAdminError(null)
-              }}
-            />
-          </label>
-          <p className="text-xs text-gray-500">
-            La clave se valida localmente y se adjunta en el encabezado `x-api-key` para crear o eliminar productos,
-            y habilitar la carga de fotos o videos.
-          </p>
-        </div>
+      {allowAdmin && (
+        <Modal open={openAdminModal} onClose={closeAdminModal} title="Acceso administrador">
+          <div className="space-y-3">
+            {adminError && <p className="text-sm text-red-500">{adminError}</p>}
+            <label className="text-sm">
+              <span className="block mb-1 text-gray-700">Clave de administrador</span>
+              <input
+                type="password"
+                className="w-full rounded border border-gray-300 px-3 py-2 focus:border-green-600 outline-none"
+                placeholder="Ingresa la clave definida en el backend"
+                value={adminKeyInput}
+                onChange={(e) => {
+                  setAdminKeyInput(e.target.value)
+                  setAdminError(null)
+                }}
+              />
+            </label>
+            <p className="text-xs text-gray-500">
+              La clave se valida localmente y se adjunta en el encabezado `x-api-key` para crear o eliminar productos,
+              y habilitar la carga de fotos o videos.
+            </p>
+          </div>
 
-        <div className="mt-4 flex justify-end gap-2">
-          <button onClick={closeAdminModal} className="rounded-lg border px-4 py-2">
-            Cancelar
-          </button>
-          <button
-            onClick={handleAdminLogin}
-            className="rounded-lg bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700"
-          >
-            Ingresar
-          </button>
-        </div>
-      </Modal>
+          <div className="mt-4 flex justify-end gap-2">
+            <button onClick={closeAdminModal} className="rounded-lg border px-4 py-2">
+              Cancelar
+            </button>
+            <button
+              onClick={handleAdminLogin}
+              className="rounded-lg bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700"
+            >
+              Ingresar
+            </button>
+          </div>
+        </Modal>
+      )}
 
       <Modal open={openReparaciones} onClose={() => setOpenReparaciones(false)} title="Galeria de reparaciones">
         <div className="mb-4 flex flex-wrap items-center gap-3">

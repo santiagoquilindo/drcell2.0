@@ -18,10 +18,10 @@ export const Footer: React.FC<Props> = ({
   onLocation
 }) => {
   return (
-    <footer className="bg-white border-t text-neutral-800 py-10 mt-12">
-      <div className="container mx-auto px-4 grid md:grid-cols-3 gap-6 items-start">
+    <footer className="mt-12 border-t bg-white py-10 text-neutral-800">
+      <div className="container mx-auto grid grid-cols-1 items-start gap-6 px-4 md:grid-cols-3">
         <div className="text-center md:text-left">
-          <h3 className="text-xl font-bold text-green-700 mb-2">Doctor Cell 2.0</h3>
+          <h3 className="text-xl font-bold text-green-700 mb-2">Dr Cell</h3>
           <p className="text-gray-600 mb-2">Tu aliado en tecnología móvil en Popayán</p>
 
           <button
@@ -51,7 +51,7 @@ export const Footer: React.FC<Props> = ({
 
         <div className="text-center">
           <p className="text-sm text-gray-600 mb-3">Síguenos</p>
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-3">
             <a
               href="https://instagram.com/doctorcell2"
               target="_blank"
@@ -100,7 +100,7 @@ export const Footer: React.FC<Props> = ({
         </div>
 
         <div className="text-center md:text-right text-sm text-gray-600">
-          <p>© {new Date().getFullYear()} Doctor Cell 2.0 – Todos los derechos reservados</p>
+          <p>© {new Date().getFullYear()} Dr Cell – Todos los derechos reservados</p>
           <div className="mt-3 flex flex-wrap md:justify-end justify-center gap-3 text-green-700">
             <button onClick={onOpenTerminos} className="underline hover:text-green-800">
               Términos y Condiciones

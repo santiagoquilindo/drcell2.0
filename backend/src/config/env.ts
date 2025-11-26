@@ -14,6 +14,7 @@ const envSchema = z.object({
   BUSINESS_ADDRESS: z.string().optional(),
   BUSINESS_PHONE: z.string().optional(),
   BUSINESS_EMAIL: z.string().email().optional(),
+  PUBLIC_APP_URL: z.string().url().optional(),
   OPENAI_API_KEY: z.string().optional(),
 })
 

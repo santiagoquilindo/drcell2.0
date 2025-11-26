@@ -8,7 +8,14 @@ import type {
   InvoiceType,
 } from '@modules/invoices'
 import type { Client, ClientInput } from '@modules/clients'
-import type { RepairDetail, RepairInput, RepairStatus, RepairSummary, RepairUpdate } from '@modules/repairs'
+import type {
+  RepairDetail,
+  RepairInput,
+  RepairStatus,
+  RepairSummary,
+  RepairUpdate,
+  PublicRepairStatus,
+} from '@modules/repairs'
 import type { DiagnosticRequest, DiagnosticResponse } from '@modules/assistant'
 import type {
   CreateReturnInput,
@@ -103,6 +110,27 @@ export async function crearProducto(input: CreateProductoInput): Promise<Product
 
   if (!res.ok) {
     const message = await parseErrorResponse(res, 'No se pudo guardar el producto')
+    throw new Error(message)
+  }
+
+  const data: ApiProducto = await res.json()
+  return mapProducto(data)
+}
+
+export async function actualizarProducto(id: number, input: CreateProductoInput): Promise<Producto> {
+  const token = ensureAdminToken()
+
+  const res = await fetch(`${API_BASE_URL}/products/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': token,
+    },
+    body: JSON.stringify(input),
+  })
+
+  if (!res.ok) {
+    const message = await parseErrorResponse(res, 'No se pudo actualizar el producto')
     throw new Error(message)
   }
 
@@ -490,6 +518,19 @@ export async function downloadRepairSticker(id: number): Promise<Blob> {
     throw new Error(message)
   }
   return res.blob()
+}
+
+export async function fetchPublicRepairStatus(code: string): Promise<PublicRepairStatus> {
+  const formatted = code.trim()
+  if (!formatted) {
+    throw new Error('Ingresa un codigo de reparacion')
+  }
+  const res = await fetch(`${API_BASE_URL}/repairs/public/${encodeURIComponent(formatted)}`)
+  if (!res.ok) {
+    const message = await parseErrorResponse(res, 'No encontramos la reparacion')
+    throw new Error(message)
+  }
+  return res.json()
 }
 
 export async function fetchReturns(params: { estado?: ReturnStatus; alerta?: string; q?: string } = {}): Promise<ReturnSummary[]> {

@@ -38,6 +38,32 @@ router.post('/', requireAdmin, async (req, res, next) => {
         next(error);
     }
 });
+router.put('/:id', requireAdmin, async (req, res, next) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id)) {
+            return res.status(400).json({ message: 'Id invalido' });
+        }
+        const data = productSchema.parse(req.body);
+        const result = await pool.query(`
+        UPDATE productos
+        SET nombre = $1,
+            descripcion = $2,
+            categoria = $3,
+            precio = $4,
+            imagen_url = $5
+        WHERE id = $6
+        RETURNING id, nombre, descripcion, categoria, precio, imagen_url AS "imagenUrl", created_at AS "createdAt"
+      `, [data.nombre, data.descripcion, data.categoria, data.precio, data.imagenUrl ?? null, id]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Producto no encontrado' });
+        }
+        res.json(result.rows[0]);
+    }
+    catch (error) {
+        next(error);
+    }
+});
 router.delete('/:id', requireAdmin, async (req, res, next) => {
     try {
         const id = Number(req.params.id);

@@ -279,7 +279,7 @@ export const Billing: React.FC = () => {
       <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm text-slate-500">Doctor Cell 2.0</p>
+            <p className="text-sm text-slate-500">Dr Cell</p>
             <h1 className="text-3xl font-bold text-slate-900">Facturación y cotizaciones</h1>
             <p className="text-slate-500">Genera cuentas de cobro y descárgalas en PDF.</p>
           </div>

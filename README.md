@@ -1,9 +1,9 @@
-# Doctor Cell 2.0 - Monorepo
+# Dr Cell - Monorepo
 
 Repositorio dividido en dos paquetes independientes:
 
-- `frontend/`: aplicaci贸n React + Vite.
-- `backend/`: API Express que expone cat谩logos, inventario y proveedores sobre PostgreSQL.
+- `frontend/`: aplicaci髇 React + Vite.
+- `backend/`: API Express que expone cat醠ogos, inventario y proveedores sobre PostgreSQL.
 
 ## Requisitos
 
@@ -25,14 +25,14 @@ npm run dev
 
 La API queda en `http://localhost:4000/api`. Todas las rutas que modifican datos (productos, inventario y proveedores) requieren enviar el header `x-api-key` con el valor de `ADMIN_API_KEY`.
 
-#### Endpoints del m贸dulo de inventario
+#### Endpoints del m骴ulo de inventario
 
-| M茅todo | Ruta | Descripci贸n |
+| M閠odo | Ruta | Descripci髇 |
 | --- | --- | --- |
 | `GET` | `/api/providers` | Listado de proveedores registrados |
 | `POST` | `/api/providers` | Registrar proveedor (nombre, contacto, etc.) |
 | `GET` | `/api/inventory` | Inventario filtrable por texto (`q`) y estado (`bajo` \| `ok`) |
-| `GET` | `/api/inventory/alerts` | Alertas autom谩ticas cuando `stock_actual <= stock_minimo` |
+| `GET` | `/api/inventory/alerts` | Alertas autom醫icas cuando `stock_actual <= stock_minimo` |
 | `POST` | `/api/inventory` | Crear repuesto/accesorio con proveedor, stock y precios |
 | `PATCH` | `/api/inventory/:id` | Actualizar proveedor, stock o precios |
 | `DELETE` | `/api/inventory/:id` | Retirar un registro del inventario |
@@ -48,26 +48,26 @@ cp .env.example .env   # ajusta VITE_API_URL si es necesario
 npm run dev
 ```
 
-Configura `VITE_API_URL` apuntando al backend (`http://localhost:4000/api` por defecto). Una vez autenticado como administrador desde el header, la p谩gina `Home.tsx` habilita el panel **Inventario de repuestos y accesorios**, desde donde se pueden registrar proveedores, administrar stock y monitorear alertas.
+Configura `VITE_API_URL` apuntando al backend (`http://localhost:4000/api` por defecto). El m骴ulo p鷅lico vive en `/` y el portal administrativo en `/admin`. Al autenticarse en `/admin`, la aplicaci髇 habilita el panel **Inventario de repuestos y accesorios**, desde donde se pueden registrar proveedores, administrar stock y monitorear alertas.
 
 ## Estructura
 
 ```
 backend/
   src/
-    app.ts          # configuraci贸n de Express
+    app.ts          # configuraci髇 de Express
     index.ts        # arranque del servidor
-    config/         # variables y conexi贸n a PostgreSQL
-    routes/         # m贸dulos de productos, inventario y proveedores
+    config/         # variables y conexi髇 a PostgreSQL
+    routes/         # m骴ulos de productos, inventario y proveedores
   sql/              # scripts para inicializar tablas
 frontend/
-  src/              # componentes React, p谩ginas y utilidades
-  public/           # assets est谩ticos
+  src/              # componentes React, p醙inas y utilidades
+  public/           # assets est醫icos
 ```
 
-## Pr贸ximos pasos sugeridos
+## Pr髕imos pasos sugeridos
 
 - Agregar pruebas automatizadas a los endpoints protegidos.
-- Sustituir el almacenamiento local de la galer铆a de reparaciones por un servicio remoto.
+- Sustituir el almacenamiento local de la galer韆 de reparaciones por un servicio remoto.
 - Preparar pipelines de despliegue para frontend y backend.
-- Integrar autenticaci贸n completa (usuarios/admin) en lugar de una sola API key.
+- Integrar autenticaci髇 completa (usuarios/admin) en lugar de una sola API key.

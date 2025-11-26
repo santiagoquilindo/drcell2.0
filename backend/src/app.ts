@@ -7,9 +7,9 @@ import routes from './routes/index.js'
 export function createApp() {
   const app = express()
 
+  const defaultOrigins = ['http://localhost:5173', 'http://localhost:5178']
   const allowedOrigins =
-    process.env.CORS_ORIGIN?.split(',').map((origin) => origin.trim()).filter(Boolean) ??
-    ['http://localhost:5173']
+    process.env.CORS_ORIGIN?.split(',').map((origin) => origin.trim()).filter(Boolean) ?? defaultOrigins
 
   const corsOptions: cors.CorsOptions = {
     origin: allowedOrigins,

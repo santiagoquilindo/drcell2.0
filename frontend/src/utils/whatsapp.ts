@@ -31,7 +31,7 @@ export const construirMensajeWhatsApp = (
   const legal =
     `${NL}${NL}_Declaro que acepto la Política de Datos y los Términos._`
 
-  return `Hola Doctor Cell 2.0! 👋 Me interesa comprar:${NL}${detalle}${pie}${legal}`
+  return `Hola Dr Cell! 👋 Me interesa comprar:${NL}${detalle}${pie}${legal}`
 }
 
 /* ---------- Abrir WhatsApp en nueva pestaña ---------- */

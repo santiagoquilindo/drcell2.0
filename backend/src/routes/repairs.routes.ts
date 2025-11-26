@@ -66,6 +66,38 @@ const progressSchema = z.object({
   registradoPor: z.string().optional(),
 })
 
+router.get('/public/:code', async (req, res, next) => {
+  try {
+    const code = String(req.params.code ?? '').trim().toUpperCase()
+    if (!code) {
+      return res.status(400).json({ message: 'Codigo requerido' })
+    }
+    const repair = await fetchRepairByCode(code)
+    if (!repair) {
+      return res.status(404).json({ message: 'Reparacion no encontrada' })
+    }
+    const updates = await fetchUpdates(repair.id)
+    res.json({
+      codigo: repair.codigo,
+      estado: repair.estado,
+      dispositivo: [repair.marca, repair.modelo].filter(Boolean).join(' ') || repair.dispositivoTipo || 'Equipo',
+      motivoIngreso: repair.motivoIngreso,
+      diagnostico: repair.diagnostico,
+      accesorios: repair.accesorios,
+      createdAt: repair.createdAt,
+      updatedAt: repair.updatedAt,
+      cliente: {
+        nombre: repair.cliente.nombre,
+        telefono: repair.cliente.telefono,
+        email: repair.cliente.email,
+      },
+      updates,
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
 router.use(requireAdmin)
 
 router.get('/', async (req, res, next) => {
@@ -341,6 +373,14 @@ type RepairUpdateRecord = {
 }
 
 async function fetchRepair(id: number): Promise<RepairRecord | null> {
+  return fetchRepairByCondition('rt.id = $1', [id])
+}
+
+async function fetchRepairByCode(code: string): Promise<RepairRecord | null> {
+  return fetchRepairByCondition('UPPER(rt.codigo) = $1', [code.toUpperCase()])
+}
+
+async function fetchRepairByCondition(where: string, values: unknown[]): Promise<RepairRecord | null> {
   const result = await pool.query(
     `
       SELECT
@@ -369,9 +409,9 @@ async function fetchRepair(id: number): Promise<RepairRecord | null> {
         c.email AS "clienteEmail"
       FROM repair_tickets rt
       INNER JOIN clients c ON c.id = rt.cliente_id
-      WHERE rt.id = $1
+      WHERE ${where}
     `,
-    [id],
+    values,
   )
 
   if (result.rowCount === 0) return null

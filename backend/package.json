@@ -17,6 +17,7 @@
     "openai": "^4.71.1",
     "pdfkit": "^0.14.0",
     "pg": "^8.11.5",
+    "qrcode": "^1.5.4",
     "zod": "^3.22.4"
   },
   "devDependencies": {

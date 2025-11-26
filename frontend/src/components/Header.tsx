@@ -1,5 +1,6 @@
 import React from 'react'
-import { MapPin, PhoneCall, ShoppingCart } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { MapPin, PhoneCall, ShoppingCart, Search } from 'lucide-react'
 import { useCart } from '@context/cart'
 
 type Props = {
@@ -35,19 +36,19 @@ export const Header: React.FC<Props> = ({ onLocation, onCart, onAdminAccess, isA
   }, [onAdminAccess])
 
   return (
-    <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b shadow-sm">
-      <div className="container mx-auto px-4 py-4 md:py-6 flex items-center justify-between">
+    <header className="sticky top-0 z-50 border-b bg-white/95 shadow-sm backdrop-blur">
+      <div className="container mx-auto flex flex-wrap items-center justify-between gap-4 px-4 py-4 md:py-6">
         {/* Logo + marca */}
-        <div className="flex items-center gap-3 select-none">
+        <div className="flex min-w-[220px] flex-1 items-center gap-3 select-none">
           <button
             type="button"
             onClick={handleSecretAccess}
             className="h-12 w-12 rounded-md overflow-hidden focus:outline-none focus:ring-2 focus:ring-green-500"
-            aria-label="Logo Doctor Cell 2.0"
+            aria-label="Logo Dr Cell"
           >
             <img
               src="/logodrcell.png"
-              alt="Doctor Cell 2.0"
+              alt="Dr Cell"
               className="h-full w-full object-cover"
               loading="eager"
               decoding="async"
@@ -55,7 +56,7 @@ export const Header: React.FC<Props> = ({ onLocation, onCart, onAdminAccess, isA
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold text-green-700">Doctor Cell 2.0</h1>
+              <h1 className="text-3xl font-bold text-green-700">Dr Cell</h1>
               {isAdmin && (
                 <span className="text-xs font-semibold text-green-700 border border-green-300 px-2 py-0.5 rounded-full">
                   Admin
@@ -67,13 +68,21 @@ export const Header: React.FC<Props> = ({ onLocation, onCart, onAdminAccess, isA
         </div>
 
         {/* Acciones */}
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
           <button
             onClick={onLocation}
             className="hidden md:flex items-center gap-2 text-gray-800 border border-gray-300 rounded-full px-3 py-1 hover:border-green-600"
           >
             <MapPin size={18} /> Local 4 - El Bostezo
           </button>
+
+          <Link
+            to="/seguimiento"
+            className="hidden md:flex items-center gap-2 border border-green-600 text-green-700 rounded-full px-3 py-1 font-semibold hover:bg-green-50"
+          >
+            <Search size={18} />
+            Seguimiento
+          </Link>
 
           <a
             href="tel:+573122650861"
