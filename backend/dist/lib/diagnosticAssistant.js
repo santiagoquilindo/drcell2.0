@@ -128,7 +128,7 @@ export async function generateDiagnosticSuggestion(input) {
     const similares = (input.similares ?? [])
         .map((item, idx) => `${idx + 1}. Tipo: ${item.tipo}. Dispositivo: ${item.dispositivo ?? 'N/D'}. Motivo: ${item.descripcion ?? 'N/D'}. Diagnóstico/resolución: ${item.diagnostico ?? item.resultado ?? 'N/D'}`)
         .join('\n') || 'Sin antecedentes relevantes.';
-        const prompt = `Eres un asesor técnico de Dr Cell. Debes orientar al cliente sobre el problema reportado.
+    const prompt = `Eres un asesor técnico de Dr Cell. Debes orientar al cliente sobre el problema reportado.
 Datos del cliente:
 - Dispositivo: ${input.dispositivo ?? 'No especificado'}
 - Motivo principal: ${input.motivo}

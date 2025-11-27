@@ -1050,6 +1050,23 @@ const [openCotizarCredito, setOpenCotizarCredito] = React.useState(false)
           </div>
         </section>
 
+        <section className="mb-8 rounded-2xl border border-green-200 bg-gradient-to-br from-white to-green-50 p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-green-600">Dr Cell Popayán</p>
+          <h2 className="text-2xl font-bold text-slate-900">Celulares, accesorios y técnicos certificados</h2>
+          <p className="mt-3 text-sm text-slate-600">
+            Somos la tienda de artículos tecnológicos en Popayán especializada en venta de celulares nuevos y usados,
+            técnicos de celulares en Popayán con experiencia y repuestos originales. Si buscas accesorios de celulares
+            en Popayán o repuestos de celulares en Popayán, en Dr Cell encuentras diagnóstico rápido, servicio
+            garantizado y seguimiento en línea.
+          </p>
+          <ul className="mt-4 space-y-2 text-sm text-slate-700">
+            <li>✓ Celulares en Popayán con garantía y planes de financiación.</li>
+            <li>✓ Técnicos de celulares en Popayán para reparaciones express y mantenimiento preventivo.</li>
+            <li>✓ Accesorios y repuestos de celulares en Popayán 100% originales.</li>
+            <li>✓ Tienda de artículos tecnológicos en Popayán para gamers, estudiantes y negocios.</li>
+          </ul>
+        </section>
+
         {isAdmin && (
           <>
             {/* Inventario administrable */}

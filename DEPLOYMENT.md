@@ -1,4 +1,4 @@
-# Despliegue de Dr Cell
+﻿# Despliegue de Dr Cell
 
 Guía para preparar una publicación del backend (API Node/Express) y del frontend (React + Vite). El monorepo permite desplegar cada parte de forma independiente.
 
@@ -87,3 +87,9 @@ npm run preview -- --host 0.0.0.0 --port 4173
 - [ ] Para accesos administrativos, la API key (`ADMIN_API_KEY`) está almacenada en un lugar seguro (por ejemplo, variable secreta en el host).
 
 Con estos pasos el proyecto queda listo para subirse a cualquier plataforma (Railway, Render, DigitalOcean, AWS, etc.) manteniendo frontend y backend desacoplados pero comunicándose vía HTTPS.
+- Programa una tarea (cron/scheduler en Render/Railway/Fly) que ejecute `sql/007_retention_cleanup.sql` cada noche para eliminar registros mayores a 60 días (reparaciones, facturas, devoluciones).
+
+### Despliegue separado para sitio y panel
+1. Ejecuta cd frontend && npm run build y despliega la carpeta rontend/dist en tu dominio público.
+2. Ejecuta cd frontend && npm run build:admin para generar rontend/dist-admin (donde index.html ya es la versión administrativa) y despliega esa carpeta en tu subdominio de panel.
+3. Actualiza VITE_API_URL en ambos sitios para apuntar al backend (Render) y ajusta CORS_ORIGIN en el backend para incluir los dos dominios.

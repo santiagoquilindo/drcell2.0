@@ -57,15 +57,34 @@ const progressSchema = z.object({
     comentario: z.string().optional(),
     registradoPor: z.string().optional(),
 });
-router.get('/public/:code', async (req, res, next) => {
+const publicTrackingSchema = z.object({
+    code: z.string().min(6),
+    nombre: z.string().min(3),
+    documento: z.string().min(3),
+});
+const normalizeText = (value) => value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+const normalizeDocument = (value) => value.replace(/[\s.-]/g, '').trim().toLowerCase();
+router.post('/public/status', async (req, res, next) => {
     try {
-        const code = String(req.params.code ?? '').trim().toUpperCase();
-        if (!code) {
-            return res.status(400).json({ message: 'Codigo requerido' });
-        }
+        const { code, nombre, documento } = publicTrackingSchema.parse(req.body);
         const repair = await fetchRepairByCode(code);
         if (!repair) {
             return res.status(404).json({ message: 'Reparacion no encontrada' });
+        }
+        if (!repair.cliente.documento) {
+            return res.status(404).json({ message: 'Reparacion no encontrada' });
+        }
+        const storedName = normalizeText(repair.cliente.nombre);
+        const storedDocument = normalizeDocument(repair.cliente.documento);
+        const providedName = normalizeText(nombre);
+        const providedDocument = normalizeDocument(documento);
+        if (storedName !== providedName || storedDocument !== providedDocument) {
+            return res.status(401).json({ message: 'Datos de verificacion invalidos' });
         }
         const updates = await fetchUpdates(repair.id);
         res.json({

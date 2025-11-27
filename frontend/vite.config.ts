@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
+import path from 'node:path'
 
 export default defineConfig({
   plugins: [react()],
@@ -12,6 +13,14 @@ export default defineConfig({
       '@modules':    fileURLToPath(new URL('./src/modules', import.meta.url)),
       '@context':    fileURLToPath(new URL('./src/context', import.meta.url)),
       '@utils':      fileURLToPath(new URL('./src/utils', import.meta.url)),
+    },
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        admin: path.resolve(__dirname, 'admin.html'),
+      },
     },
   },
 })
