@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:prod": "vite build",
     "build:admin": "npm run build && node scripts/prepare-admin-build.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:prod": "vite preview --host 0.0.0.0 --port 4173"
   },
   "dependencies": {
     "react": "^18.2.0",

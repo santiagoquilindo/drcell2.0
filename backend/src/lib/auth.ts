@@ -34,16 +34,21 @@ export const parseCookies = (cookieHeader?: string | null) => {
 }
 
 export const buildSessionCookie = (token: string, expiresAt: Date) => {
+  const secure = env.SESSION_COOKIE_SECURE ?? env.NODE_ENV === 'production'
   const parts = [
     `${env.SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
     'Path=/',
     'HttpOnly',
-    'SameSite=Lax',
+    `SameSite=${capitalizeSameSite(env.SESSION_COOKIE_SAME_SITE)}`,
     `Max-Age=${env.SESSION_TTL_HOURS * 60 * 60}`,
     `Expires=${expiresAt.toUTCString()}`,
   ]
 
-  if (env.NODE_ENV === 'production') {
+  if (env.SESSION_COOKIE_DOMAIN) {
+    parts.push(`Domain=${env.SESSION_COOKIE_DOMAIN}`)
+  }
+
+  if (secure) {
     parts.push('Secure')
   }
 
@@ -51,15 +56,20 @@ export const buildSessionCookie = (token: string, expiresAt: Date) => {
 }
 
 export const buildExpiredSessionCookie = () => {
+  const secure = env.SESSION_COOKIE_SECURE ?? env.NODE_ENV === 'production'
   const parts = [
     `${env.SESSION_COOKIE_NAME}=`,
     'Path=/',
     'HttpOnly',
-    'SameSite=Lax',
+    `SameSite=${capitalizeSameSite(env.SESSION_COOKIE_SAME_SITE)}`,
     'Expires=Thu, 01 Jan 1970 00:00:00 GMT',
   ]
 
-  if (env.NODE_ENV === 'production') {
+  if (env.SESSION_COOKIE_DOMAIN) {
+    parts.push(`Domain=${env.SESSION_COOKIE_DOMAIN}`)
+  }
+
+  if (secure) {
     parts.push('Secure')
   }
 
@@ -77,4 +87,8 @@ function scrypt(password: string, salt: string) {
       resolve(derivedKey.toString('hex'))
     })
   })
+}
+
+function capitalizeSameSite(value: 'lax' | 'strict' | 'none') {
+  return value.charAt(0).toUpperCase() + value.slice(1)
 }

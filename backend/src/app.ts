@@ -8,6 +8,11 @@ import routes from './routes/index.js'
 
 export function createApp() {
   const app = express()
+  const uploadsDirectory = path.resolve(process.cwd(), env.UPLOADS_DIR)
+
+  if (env.TRUST_PROXY) {
+    app.set('trust proxy', 1)
+  }
 
   const allowedOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
 
@@ -33,7 +38,13 @@ export function createApp() {
   })
   app.use(express.json({ limit: '8mb' }))
   app.use(express.urlencoded({ extended: false }))
-  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')))
+  app.use(
+    '/uploads',
+    express.static(uploadsDirectory, {
+      fallthrough: false,
+      maxAge: env.NODE_ENV === 'production' ? '1d' : 0,
+    }),
+  )
 
   app.use('/api', routes)
 

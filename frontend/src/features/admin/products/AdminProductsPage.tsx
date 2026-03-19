@@ -29,6 +29,8 @@ export function AdminProductsPage() {
   const [query, setQuery] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState(initialForm)
+  const [selectedImageName, setSelectedImageName] = useState<string | null>(null)
+  const [imageError, setImageError] = useState<string | null>(null)
 
   const isEditing = editingId !== null
 
@@ -81,6 +83,8 @@ export function AdminProductsPage() {
   const resetForm = () => {
     setEditingId(null)
     setForm(initialForm)
+    setSelectedImageName(null)
+    setImageError(null)
   }
 
   const buildPayload = (): ProductPayload => {
@@ -97,6 +101,10 @@ export function AdminProductsPage() {
 
     if (!Number.isInteger(stock) || stock < 0) {
       throw new Error('El stock debe ser un entero mayor o igual a cero.')
+    }
+
+    if (imageError) {
+      throw new Error(imageError)
     }
 
     return {
@@ -140,6 +148,8 @@ export function AdminProductsPage() {
   const handleEdit = (product: Product) => {
     setEditingId(product.id)
     setSuccess(null)
+    setImageError(null)
+    setSelectedImageName(product.imagenUrl ? 'Imagen actual del producto' : null)
     setForm({
       nombre: product.nombre,
       descripcion: product.descripcion,
@@ -249,19 +259,28 @@ export function AdminProductsPage() {
                 try {
                   const image = await fileToDataUrl(file)
                   setForm((prev) => ({ ...prev, imagen: image }))
+                  setSelectedImageName(file.name)
+                  setImageError(null)
                   setError(null)
                   setSuccess('Imagen lista para guardarse con el producto.')
                 } catch (fileError) {
+                  setForm((prev) => ({ ...prev, imagen: undefined }))
+                  setSelectedImageName(null)
+                  setImageError(fileError instanceof Error ? fileError.message : 'No se pudo cargar la imagen')
+                  setSuccess(null)
                   setError(fileError instanceof Error ? fileError.message : 'No se pudo cargar la imagen')
                 }
               }}
             />
           </label>
 
-          {success && <p className="form-success">{success}</p>}
-          {error && <p className="form-error">{error}</p>}
+          {selectedImageName && !imageError && <p className="muted">Imagen preparada: {selectedImageName}</p>}
+          {imageError && <p className="form-error">{imageError}</p>}
 
-          <button className="primary-button" disabled={saving} type="submit">
+          {success && <p className="form-success">{success}</p>}
+          {error && error !== imageError && <p className="form-error">{error}</p>}
+
+          <button className="primary-button" disabled={saving || Boolean(imageError)} type="submit">
             {saving ? 'Guardando...' : isEditing ? 'Actualizar producto' : 'Crear producto'}
           </button>
         </form>

@@ -1,16 +1,16 @@
 # Dr. Cell
 
-Monorepo con dos aplicaciones separadas:
+Monorepo con dos aplicaciones:
 
-- `frontend/`: React + Vite para catálogo público y panel administrador.
-- `backend/`: API Express + PostgreSQL con autenticación admin, productos, inventario y reparaciones.
+- `frontend/`: React + Vite para catálogo público, tracking y panel admin.
+- `backend/`: Express + PostgreSQL para auth admin, productos, reparaciones e inventario.
 
 ## Requisitos
 
 - Node.js 20+
 - PostgreSQL 14+
 
-## Puesta en marcha
+## Desarrollo local
 
 ### Backend
 
@@ -30,8 +30,6 @@ npm run create-admin -- admin@drcell.com TuPasswordSegura "Administrador Dr Cell
 npm run dev
 ```
 
-La API queda disponible en `http://localhost:4000/api`.
-
 ### Frontend
 
 ```bash
@@ -41,7 +39,23 @@ copy .env.example .env
 npm run dev
 ```
 
-El catálogo público vive en `/` y el acceso administrativo en `/admin/login`.
+## Scripts principales
+
+Backend:
+
+- `npm run dev`
+- `npm run build`
+- `npm run start`
+- `npm run start:prod`
+- `npm run create-admin -- <email> <password> "<nombre>"`
+
+Frontend:
+
+- `npm run dev`
+- `npm run build`
+- `npm run build:prod`
+- `npm run preview`
+- `npm run preview:prod`
 
 ## Variables de entorno clave
 
@@ -51,6 +65,11 @@ Backend:
 - `CORS_ORIGIN`
 - `SESSION_COOKIE_NAME`
 - `SESSION_TTL_HOURS`
+- `SESSION_COOKIE_DOMAIN`
+- `SESSION_COOKIE_SAME_SITE`
+- `SESSION_COOKIE_SECURE`
+- `TRUST_PROXY`
+- `UPLOADS_DIR`
 - `PUBLIC_APP_URL`
 
 Frontend:
@@ -58,36 +77,16 @@ Frontend:
 - `VITE_API_URL`
 - `VITE_WHATSAPP_NUMBER`
 
-## Estructura
+## Producción
 
-```text
-backend/
-  src/
-    app.ts
-    index.ts
-    config/
-    lib/
-    middleware/
-    routes/
-    scripts/
-  sql/
-  uploads/
-frontend/
-  src/
-    app/
-    features/
-      admin/
-      public/
-    shared/
-```
+La guía completa de despliegue está en:
+
+- [docs/DEPLOY.md](/Users/Personal/Documents/d/proyectos%20nuevos/dr%20cell%20git%20hub/drcell/docs/DEPLOY.md)
+- [docs/PRELAUNCH.md](/Users/Personal/Documents/d/proyectos%20nuevos/dr%20cell%20git%20hub/drcell/docs/PRELAUNCH.md)
 
 ## Estado actual
 
-- Fase 1 completada: auth admin real, CRUD de productos, uploads locales, catálogo público, carrito y envío a WhatsApp.
-- Fase 1.1 completada: endurecimiento de auth, validación de imágenes, limpieza de rutas inseguras, ajuste de CORS y limpieza técnica base.
-
-## Siguiente fase
-
-- Integrar servicios y reparaciones en la nueva UI administrativa y pública.
-- Consolidar inventario operativo sobre la arquitectura nueva.
-- Añadir pruebas automatizadas a módulos críticos.
+- Fase 1: auth admin, productos, catálogo y carrito con WhatsApp.
+- Fase 2: reparaciones admin y tracking público.
+- Fase 3: mejora UX/UI pública y administrativa.
+- Fase 4: preparación para despliegue y operación productiva básica.

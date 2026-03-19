@@ -2,6 +2,7 @@ import type { DatabaseError, PoolClient } from 'pg'
 import { Router } from 'express'
 import type { Response } from 'express'
 import { z } from 'zod'
+import crypto from 'node:crypto'
 
 import { pool } from '../config/database.js'
 import { requireAdmin } from '../middleware/requireAdmin.js'
@@ -92,16 +93,25 @@ const progressSchema = z.object({
   registradoPor: z.string().trim().max(120).optional(),
 })
 
-const trackingCodeSchema = z.object({
+const trackingLookupSchema = z.object({
   code: z.string().trim().min(6).max(32),
+  verifier: z.string().trim().min(4).max(12),
 })
 
-router.get('/public/:code', async (req, res, next) => {
+router.get('/public/:code', async (_req, res) => {
+  res.status(400).json({ message: 'Debes consultar el ticket con codigo y verificacion.' })
+})
+
+router.post('/public/lookup', async (req, res, next) => {
   try {
-    const { code } = trackingCodeSchema.parse(req.params)
+    const { code, verifier } = trackingLookupSchema.parse(req.body)
     const repair = await fetchRepairByCode(code)
     if (!repair) {
       return res.status(404).json({ message: 'Reparacion no encontrada' })
+    }
+
+    if (!matchesTrackingVerifier(repair, verifier)) {
+      return res.status(403).json({ message: 'Verificacion invalida para este ticket' })
     }
 
     const updates = await fetchUpdates(repair.id)
@@ -600,10 +610,11 @@ async function createClientFromPayload(conn: PoolClient, payload: z.infer<typeof
 async function generateRepairCode(conn: PoolClient) {
   const result = await conn.query<{ seq: string }>(`SELECT LPAD(nextval('repair_ticket_seq')::text, 4, '0') AS seq`)
   const now = new Date()
+  const suffix = crypto.randomBytes(2).toString('hex').toUpperCase()
   return `RPR-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(
     2,
     '0',
-  )}-${result.rows[0].seq}`
+  )}-${result.rows[0].seq}-${suffix}`
 }
 
 function mapRepairTrackingResponse(repair: RepairRecord, updates: RepairUpdateRecord[]) {
@@ -640,4 +651,14 @@ function handleRepairMutationError(error: unknown, res: Response) {
   }
 
   return null
+}
+
+function matchesTrackingVerifier(repair: RepairRecord, verifier: string) {
+  const normalizedVerifier = verifier.trim().toLowerCase()
+  if (!normalizedVerifier) return false
+
+  const documentTail = repair.cliente.documento?.replace(/\D/g, '').slice(-4)
+  const phoneTail = repair.cliente.telefono?.replace(/\D/g, '').slice(-4)
+
+  return normalizedVerifier === documentTail || normalizedVerifier === phoneTail
 }

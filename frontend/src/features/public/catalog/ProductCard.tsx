@@ -1,4 +1,5 @@
 import { formatCurrency } from '@shared/lib/currency'
+import { resolveAssetUrl } from '@shared/lib/assets'
 import type { Product } from '@shared/types/product'
 
 type Props = {
@@ -7,6 +8,8 @@ type Props = {
 }
 
 export function ProductCard({ product, onAdd }: Props) {
+  const imageUrl = resolveAssetUrl(product.imagenUrl)
+
   return (
     <article className="product-card">
       <div className="product-card-topline">
@@ -15,7 +18,7 @@ export function ProductCard({ product, onAdd }: Props) {
       </div>
 
       <div className="product-card-image">
-        {product.imagenUrl ? <img src={product.imagenUrl} alt={product.nombre} /> : <span>Sin imagen</span>}
+        {imageUrl ? <img src={imageUrl} alt={product.nombre} /> : <span>Sin imagen</span>}
       </div>
 
       <div className="stack-sm">

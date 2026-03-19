@@ -39,6 +39,9 @@ export async function addRepairUpdate(id: number, payload: RepairUpdatePayload) 
   })
 }
 
-export async function fetchRepairTracking(code: string) {
-  return apiRequest<RepairTracking>(`/repairs/public/${encodeURIComponent(code)}`)
+export async function fetchRepairTracking(payload: { code: string; verifier: string }) {
+  return apiRequest<RepairTracking>('/repairs/public/lookup', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
 }

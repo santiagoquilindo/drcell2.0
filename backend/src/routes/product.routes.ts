@@ -4,6 +4,7 @@ import crypto from 'node:crypto'
 import { Router } from 'express'
 import { z } from 'zod'
 
+import { env } from '../config/env.js'
 import { pool } from '../config/database.js'
 import { requireAdmin } from '../middleware/requireAdmin.js'
 
@@ -50,7 +51,7 @@ router.get('/admin/all', requireAdmin, async (_req, res, next) => {
           precio,
           stock,
           activo,
-          image_path AS "imagenUrl",
+          COALESCE(image_path, imagen_url) AS "imagenUrl",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM productos
@@ -76,7 +77,7 @@ router.get('/', async (_req, res, next) => {
           precio,
           stock,
           activo,
-          image_path AS "imagenUrl",
+          COALESCE(image_path, imagen_url) AS "imagenUrl",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM productos
@@ -109,7 +110,7 @@ router.post('/', requireAdmin, async (req, res, next) => {
           precio,
           stock,
           activo,
-          image_path AS "imagenUrl",
+          COALESCE(image_path, imagen_url) AS "imagenUrl",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
       `,
@@ -142,7 +143,10 @@ router.put('/:id', requireAdmin, async (req, res, next) => {
       return res.status(400).json({ message: 'Id invalido' })
     }
     const data = productSchema.parse(req.body)
-    const current = await pool.query<{ imagePath: string | null }>('SELECT image_path AS "imagePath" FROM productos WHERE id = $1', [id])
+    const current = await pool.query<{ imagePath: string | null }>(
+      'SELECT COALESCE(image_path, imagen_url) AS "imagePath" FROM productos WHERE id = $1',
+      [id],
+    )
     if (current.rowCount === 0) {
       return res.status(404).json({ message: 'Producto no encontrado' })
     }
@@ -171,7 +175,7 @@ router.put('/:id', requireAdmin, async (req, res, next) => {
           precio,
           stock,
           activo,
-          image_path AS "imagenUrl",
+          COALESCE(image_path, imagen_url) AS "imagenUrl",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
       `,
@@ -206,7 +210,7 @@ router.delete('/:id', requireAdmin, async (req, res, next) => {
       return res.status(400).json({ message: 'Id invalido' })
     }
     const existing = await pool.query<{ imagePath: string | null }>(
-      'SELECT image_path AS "imagePath" FROM productos WHERE id = $1',
+      'SELECT COALESCE(image_path, imagen_url) AS "imagePath" FROM productos WHERE id = $1',
       [id],
     )
     const result = await pool.query('DELETE FROM productos WHERE id = $1', [id])
@@ -224,6 +228,8 @@ router.delete('/:id', requireAdmin, async (req, res, next) => {
 
 export default router
 
+const productUploadsDirectory = path.resolve(process.cwd(), env.UPLOADS_DIR, 'products')
+
 async function saveProductImage(dataUrl?: string) {
   if (!dataUrl) return null
 
@@ -234,10 +240,9 @@ async function saveProductImage(dataUrl?: string) {
 
   const extension = match[1].toLowerCase() === 'jpeg' ? 'jpg' : match[1].toLowerCase()
   const buffer = Buffer.from(match[2], 'base64')
-  const directory = path.resolve(process.cwd(), 'uploads', 'products')
-  await fs.mkdir(directory, { recursive: true })
+  await fs.mkdir(productUploadsDirectory, { recursive: true })
   const filename = `${Date.now()}-${crypto.randomUUID()}.${extension}`
-  await fs.writeFile(path.join(directory, filename), buffer)
+  await fs.writeFile(path.join(productUploadsDirectory, filename), buffer)
   return `/uploads/products/${filename}`
 }
 
@@ -267,6 +272,7 @@ function getDataUrlByteLength(dataUrl: string) {
 
 async function deleteProductImage(imagePath: string) {
   if (!imagePath.startsWith('/uploads/products/')) return
-  const absolutePath = path.resolve(process.cwd(), imagePath.replace(/^\/+/, ''))
+  const filename = path.basename(imagePath)
+  const absolutePath = path.join(productUploadsDirectory, filename)
   await fs.rm(absolutePath, { force: true })
 }

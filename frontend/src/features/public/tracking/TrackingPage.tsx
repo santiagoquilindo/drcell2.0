@@ -6,6 +6,7 @@ import type { RepairTracking } from '@shared/types/repair'
 
 export function TrackingPage() {
   const [code, setCode] = useState('')
+  const [verifier, setVerifier] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [tracking, setTracking] = useState<RepairTracking | null>(null)
@@ -14,22 +15,32 @@ export function TrackingPage() {
     event.preventDefault()
 
     const normalizedCode = code.trim().toUpperCase()
+    const normalizedVerifier = verifier.replace(/\D/g, '').slice(-4)
     if (!normalizedCode) {
       setTracking(null)
       setError('Ingresa un codigo de ticket.')
       return
     }
 
-    if (!/^RPR-\d{8}-\d{4,}$/.test(normalizedCode)) {
+    if (!/^RPR-\d{8}-\d{4,}(?:-[A-Z0-9]{4})?$/.test(normalizedCode)) {
       setTracking(null)
-      setError('El codigo debe tener un formato valido. Ejemplo: RPR-20260319-0001.')
+      setError('El codigo debe tener un formato valido. Ejemplo: RPR-20260319-0001-AB12.')
+      return
+    }
+
+    if (normalizedVerifier.length !== 4) {
+      setTracking(null)
+      setError('Ingresa los ultimos 4 digitos del telefono o documento del cliente.')
       return
     }
 
     try {
       setLoading(true)
       setError(null)
-      const response = await fetchRepairTracking(normalizedCode)
+      const response = await fetchRepairTracking({
+        code: normalizedCode,
+        verifier: normalizedVerifier,
+      })
       setTracking(response)
     } catch (requestError) {
       setTracking(null)
@@ -52,10 +63,23 @@ export function TrackingPage() {
           <label>
             <span>Codigo de ticket</span>
             <input
-              placeholder="Ej. RPR-20260319-0001"
+              placeholder="Ej. RPR-20260319-0001-AB12"
               value={code}
               onChange={(event) => {
                 setCode(event.target.value.toUpperCase())
+                setError(null)
+              }}
+            />
+          </label>
+          <label>
+            <span>Verificacion del cliente</span>
+            <input
+              inputMode="numeric"
+              maxLength={4}
+              placeholder="Ultimos 4 digitos"
+              value={verifier}
+              onChange={(event) => {
+                setVerifier(event.target.value.replace(/\D/g, '').slice(0, 4))
                 setError(null)
               }}
             />
@@ -71,7 +95,7 @@ export function TrackingPage() {
       {!tracking && !error && (
         <section className="panel message-card">
           <strong>Seguimiento simple y directo</strong>
-          <p className="muted">Usa tu ticket para consultar avances sin llamar ni escribir primero. Solo mostramos el estado tecnico necesario para el cliente.</p>
+          <p className="muted">Usa tu ticket y los ultimos 4 digitos del telefono o documento del cliente. Solo mostramos el estado tecnico necesario para el seguimiento.</p>
         </section>
       )}
 
