@@ -1,26 +1,39 @@
 import cors from 'cors'
 import express from 'express'
+import path from 'node:path'
 import { ZodError } from 'zod'
 
+import { env } from './config/env.js'
 import routes from './routes/index.js'
 
 export function createApp() {
   const app = express()
 
-  const defaultOrigins = ['http://localhost:5173', 'http://localhost:5178']
-  const allowedOrigins =
-    process.env.CORS_ORIGIN?.split(',').map((origin) => origin.trim()).filter(Boolean) ?? defaultOrigins
+  const allowedOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
 
   const corsOptions: cors.CorsOptions = {
-    origin: allowedOrigins,
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true)
+        return
+      }
+
+      callback(new Error('Origin not allowed'))
+    },
     credentials: true,
   }
 
   app.use(
     cors(corsOptions),
   )
-  app.use(express.json({ limit: '5mb' }))
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+    next()
+  })
+  app.use(express.json({ limit: '8mb' }))
   app.use(express.urlencoded({ extended: false }))
+  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')))
 
   app.use('/api', routes)
 

@@ -8,11 +8,9 @@ export default defineConfig({
   server: { port: 5178 },
   resolve: {
     alias: {
-      '@components': fileURLToPath(new URL('./src/components', import.meta.url)),
-      '@pages':      fileURLToPath(new URL('./src/pages', import.meta.url)),
-      '@modules':    fileURLToPath(new URL('./src/modules', import.meta.url)),
-      '@context':    fileURLToPath(new URL('./src/context', import.meta.url)),
-      '@utils':      fileURLToPath(new URL('./src/utils', import.meta.url)),
+      '@app': fileURLToPath(new URL('./src/app', import.meta.url)),
+      '@features': fileURLToPath(new URL('./src/features', import.meta.url)),
+      '@shared': fileURLToPath(new URL('./src/shared', import.meta.url)),
     },
   },
   build: {

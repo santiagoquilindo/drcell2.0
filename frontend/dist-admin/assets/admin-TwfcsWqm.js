@@ -1,1 +1,0 @@
-import{R as t,j as e,a as o,B as a,A as n}from"./index-CDCdLlIH.js";typeof window<"u"&&!window.location.pathname.startsWith("/admin")&&window.history.replaceState(null,"","/admin");t.createRoot(document.getElementById("root")).render(e.jsx(o.StrictMode,{children:e.jsx(a,{children:e.jsx(n,{})})}));

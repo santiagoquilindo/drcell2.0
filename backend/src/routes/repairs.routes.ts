@@ -1,5 +1,6 @@
-import type { PoolClient } from 'pg'
+import type { DatabaseError, PoolClient } from 'pg'
 import { Router } from 'express'
+import type { Response } from 'express'
 import { z } from 'zod'
 
 import { pool } from '../config/database.js'
@@ -11,114 +12,100 @@ const router = Router()
 const statusEnum = z.enum(['ingresado', 'diagnostico', 'en_proceso', 'listo', 'entregado'])
 
 const clientSchema = z.object({
-  nombre: z.string().min(1),
-  documento: z.string().optional(),
-  telefono: z.string().optional(),
-  email: z.string().email().optional(),
-  direccion: z.string().optional(),
-  notas: z.string().optional(),
+  nombre: z.string().trim().min(1).max(120),
+  documento: z.string().trim().max(40).optional(),
+  telefono: z.string().trim().max(40).optional(),
+  email: z.string().trim().email().max(120).optional(),
+  direccion: z.string().trim().max(200).optional(),
+  notas: z.string().trim().max(1000).optional(),
 })
 
 const repairCreateSchema = z
   .object({
     clientId: z.number().int().positive().optional(),
     client: clientSchema.optional(),
-    dispositivoTipo: z.string().optional(),
-    marca: z.string().optional(),
-    modelo: z.string().optional(),
-    referencia: z.string().optional(),
-    color: z.string().optional(),
-    serie: z.string().optional(),
-    motivoIngreso: z.string().min(1),
-    diagnostico: z.string().optional(),
-    accesorios: z.string().optional(),
+    dispositivoTipo: z.string().trim().max(80).optional(),
+    marca: z.string().trim().max(80).optional(),
+    modelo: z.string().trim().max(120).optional(),
+    referencia: z.string().trim().max(120).optional(),
+    color: z.string().trim().max(40).optional(),
+    serie: z.string().trim().max(120).optional(),
+    motivoIngreso: z.string().trim().min(1).max(1500),
+    diagnostico: z.string().trim().max(1500).optional(),
+    accesorios: z.string().trim().max(500).optional(),
     estado: statusEnum.optional(),
-    costoEstimado: z.coerce.number().min(0).optional(),
-    costoFinal: z.coerce.number().min(0).optional(),
-    responsable: z.string().optional(),
-    notas: z.string().optional(),
+    costoEstimado: z.coerce.number().min(0).max(999999999).optional(),
+    costoFinal: z.coerce.number().min(0).max(999999999).optional(),
+    responsable: z.string().trim().max(120).optional(),
+    notas: z.string().trim().max(1500).optional(),
   })
   .refine((data) => data.clientId || data.client, {
-    message: 'Debe seleccionar o crear un cliente',
+    message: 'Debes seleccionar o crear un cliente',
     path: ['clientId'],
   })
 
-const repairUpdateSchema = z.object({
-  dispositivoTipo: z.string().optional(),
-  marca: z.string().optional(),
-  modelo: z.string().optional(),
-  referencia: z.string().optional(),
-  color: z.string().optional(),
-  serie: z.string().optional(),
-  motivoIngreso: z.string().optional(),
-  diagnostico: z.string().optional(),
-  accesorios: z.string().optional(),
-  estado: statusEnum.optional(),
-  costoEstimado: z.coerce.number().min(0).optional(),
-  costoFinal: z.coerce.number().min(0).optional(),
-  responsable: z.string().optional(),
-  notas: z.string().optional(),
-})
+const repairUpdateSchema = z
+  .object({
+    dispositivoTipo: z.string().trim().max(80).optional(),
+    marca: z.string().trim().max(80).optional(),
+    modelo: z.string().trim().max(120).optional(),
+    referencia: z.string().trim().max(120).optional(),
+    color: z.string().trim().max(40).optional(),
+    serie: z.string().trim().max(120).optional(),
+    motivoIngreso: z.string().trim().min(1).max(1500).optional(),
+    diagnostico: z.string().trim().max(1500).optional(),
+    accesorios: z.string().trim().max(500).optional(),
+    estado: statusEnum.optional(),
+    costoEstimado: z.coerce.number().min(0).max(999999999).optional(),
+    costoFinal: z.coerce.number().min(0).max(999999999).optional(),
+    responsable: z.string().trim().max(120).optional(),
+    notas: z.string().trim().max(1500).optional(),
+    client: clientSchema.partial().optional(),
+  })
+  .refine(
+    (data) =>
+      [
+        data.dispositivoTipo,
+        data.marca,
+        data.modelo,
+        data.referencia,
+        data.color,
+        data.serie,
+        data.motivoIngreso,
+        data.diagnostico,
+        data.accesorios,
+        data.estado,
+        data.costoEstimado,
+        data.costoFinal,
+        data.responsable,
+        data.notas,
+        data.client,
+      ].some((value) => value !== undefined),
+    {
+      message: 'No hay datos para actualizar',
+    },
+  )
 
 const progressSchema = z.object({
   estado: statusEnum,
-  comentario: z.string().optional(),
-  registradoPor: z.string().optional(),
+  comentario: z.string().trim().max(1000).optional(),
+  registradoPor: z.string().trim().max(120).optional(),
 })
 
-const publicTrackingSchema = z.object({
-  code: z.string().min(6),
-  nombre: z.string().min(3),
-  documento: z.string().min(3),
+const trackingCodeSchema = z.object({
+  code: z.string().trim().min(6).max(32),
 })
 
-const normalizeText = (value: string) =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase()
-
-const normalizeDocument = (value: string) => value.replace(/[\s.-]/g, '').trim().toLowerCase()
-
-router.post('/public/status', async (req, res, next) => {
+router.get('/public/:code', async (req, res, next) => {
   try {
-    const { code, nombre, documento } = publicTrackingSchema.parse(req.body)
+    const { code } = trackingCodeSchema.parse(req.params)
     const repair = await fetchRepairByCode(code)
     if (!repair) {
       return res.status(404).json({ message: 'Reparacion no encontrada' })
     }
-    if (!repair.cliente.documento) {
-      return res.status(404).json({ message: 'Reparacion no encontrada' })
-    }
-
-    const storedName = normalizeText(repair.cliente.nombre)
-    const storedDocument = normalizeDocument(repair.cliente.documento)
-    const providedName = normalizeText(nombre)
-    const providedDocument = normalizeDocument(documento)
-
-    if (storedName !== providedName || storedDocument !== providedDocument) {
-      return res.status(401).json({ message: 'Datos de verificacion invalidos' })
-    }
 
     const updates = await fetchUpdates(repair.id)
-    res.json({
-      codigo: repair.codigo,
-      estado: repair.estado,
-      dispositivo: [repair.marca, repair.modelo].filter(Boolean).join(' ') || repair.dispositivoTipo || 'Equipo',
-      motivoIngreso: repair.motivoIngreso,
-      diagnostico: repair.diagnostico,
-      accesorios: repair.accesorios,
-      createdAt: repair.createdAt,
-      updatedAt: repair.updatedAt,
-      cliente: {
-        nombre: repair.cliente.nombre,
-        telefono: repair.cliente.telefono,
-        email: repair.cliente.email,
-      },
-      updates,
-    })
+    res.json(mapRepairTrackingResponse(repair, updates))
   } catch (error) {
     next(error)
   }
@@ -134,9 +121,12 @@ router.get('/', async (req, res, next) => {
 
     if (typeof q === 'string' && q.trim()) {
       values.push(`%${q.trim().toLowerCase()}%`)
-      filters.push(`(LOWER(rt.codigo) LIKE $${values.length} OR LOWER(c.nombre) LIKE $${values.length})`)
+      filters.push(
+        `(LOWER(rt.codigo) LIKE $${values.length} OR LOWER(c.nombre) LIKE $${values.length} OR LOWER(coalesce(rt.marca, '')) LIKE $${values.length} OR LOWER(coalesce(rt.modelo, '')) LIKE $${values.length})`,
+      )
     }
-    if (estado && statusEnum.options.includes(estado as any)) {
+
+    if (estado && statusEnum.options.includes(estado as (typeof statusEnum.options)[number])) {
       values.push(estado)
       filters.push(`rt.estado = $${values.length}`)
     }
@@ -155,20 +145,28 @@ router.get('/', async (req, res, next) => {
           rt.motivo_ingreso AS "motivoIngreso",
           rt.responsable,
           rt.created_at AS "createdAt",
+          rt.updated_at AS "updatedAt",
           c.id AS "clienteId",
           c.nombre AS "clienteNombre",
+          c.telefono AS "clienteTelefono",
           rt.costo_estimado AS "costoEstimado",
           rt.costo_final AS "costoFinal"
         FROM repair_tickets rt
         INNER JOIN clients c ON c.id = rt.cliente_id
         ${where}
-        ORDER BY rt.created_at DESC
+        ORDER BY rt.updated_at DESC, rt.created_at DESC
         LIMIT 100
       `,
       values,
     )
 
-    res.json(result.rows)
+    res.json(
+      result.rows.map((row) => ({
+        ...row,
+        costoEstimado: Number(row.costoEstimado ?? 0),
+        costoFinal: Number(row.costoFinal ?? 0),
+      })),
+    )
   } catch (error) {
     next(error)
   }
@@ -177,10 +175,15 @@ router.get('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const id = Number(req.params.id)
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ message: 'Id invalido' })
+    }
+
     const repair = await fetchRepair(id)
     if (!repair) {
-      return res.status(404).json({ message: 'Reparación no encontrada' })
+      return res.status(404).json({ message: 'Reparacion no encontrada' })
     }
+
     const updates = await fetchUpdates(id)
     res.json({ ...repair, updates })
   } catch (error) {
@@ -190,9 +193,11 @@ router.get('/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   const client = await pool.connect()
+  let transactionStarted = false
   try {
     const data = repairCreateSchema.parse(req.body)
     await client.query('BEGIN')
+    transactionStarted = true
 
     const clienteId = data.clientId ?? (await createClientFromPayload(client, data.client!))
     const codigo = await generateRepairCode(client)
@@ -204,25 +209,25 @@ router.post('/', async (req, res, next) => {
            diagnostico, accesorios, estado, costo_estimado, costo_final, responsable, notas)
         VALUES
           ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-        RETURNING *
+        RETURNING id
       `,
       [
         codigo,
         clienteId,
-        data.dispositivoTipo ?? null,
-        data.marca ?? null,
-        data.modelo ?? null,
-        data.referencia ?? null,
-        data.color ?? null,
-        data.serie ?? null,
-        data.motivoIngreso,
-        data.diagnostico ?? null,
-        data.accesorios ?? null,
+        asNullable(data.dispositivoTipo),
+        asNullable(data.marca),
+        asNullable(data.modelo),
+        asNullable(data.referencia),
+        asNullable(data.color),
+        asNullable(data.serie),
+        data.motivoIngreso.trim(),
+        asNullable(data.diagnostico),
+        asNullable(data.accesorios),
         data.estado ?? 'ingresado',
         data.costoEstimado ?? 0,
         data.costoFinal ?? 0,
-        data.responsable ?? null,
-        data.notas ?? null,
+        asNullable(data.responsable),
+        asNullable(data.notas),
       ],
     )
 
@@ -231,12 +236,7 @@ router.post('/', async (req, res, next) => {
         INSERT INTO repair_updates (repair_id, estado, comentario, registrado_por)
         VALUES ($1, $2, $3, $4)
       `,
-      [
-        inserted.rows[0].id,
-        data.estado ?? 'ingresado',
-        data.notas ?? 'Ingreso',
-        data.responsable ?? 'Sistema',
-      ],
+      [inserted.rows[0].id, data.estado ?? 'ingresado', data.notas ?? 'Ingreso inicial', data.responsable ?? 'Sistema'],
     )
 
     await client.query('COMMIT')
@@ -244,7 +244,11 @@ router.post('/', async (req, res, next) => {
     const updates = await fetchUpdates(inserted.rows[0].id)
     res.status(201).json({ ...repair!, updates })
   } catch (error) {
-    await client.query('ROLLBACK')
+    if (transactionStarted) {
+      await client.query('ROLLBACK')
+    }
+    const knownError = handleRepairMutationError(error, res)
+    if (knownError) return
     next(error)
   } finally {
     client.release()
@@ -252,96 +256,173 @@ router.post('/', async (req, res, next) => {
 })
 
 router.patch('/:id', async (req, res, next) => {
+  const client = await pool.connect()
+  let transactionStarted = false
   try {
     const id = Number(req.params.id)
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ message: 'Id invalido' })
+    }
+
     const data = repairUpdateSchema.parse(req.body)
+    const current = await fetchRepair(id)
+    if (!current) {
+      return res.status(404).json({ message: 'Reparacion no encontrada' })
+    }
+
+    await client.query('BEGIN')
+    transactionStarted = true
+
     const fields: string[] = []
     const values: unknown[] = []
 
     const push = (column: string, value: unknown) => {
-      fields.push(`${column} = $${fields.length + 1}`)
+      fields.push(`${column} = $${values.length + 1}`)
       values.push(value)
     }
 
-    Object.entries({
-      dispositivo_tipo: data.dispositivoTipo,
-      marca: data.marca,
-      modelo: data.modelo,
-      referencia: data.referencia,
-      color: data.color,
-      serie: data.serie,
-      motivo_ingreso: data.motivoIngreso,
-      diagnostico: data.diagnostico,
-      accesorios: data.accesorios,
+    const ticketFields: Record<string, unknown> = {
+      dispositivo_tipo: asNullable(data.dispositivoTipo),
+      marca: asNullable(data.marca),
+      modelo: asNullable(data.modelo),
+      referencia: asNullable(data.referencia),
+      color: asNullable(data.color),
+      serie: asNullable(data.serie),
+      motivo_ingreso: data.motivoIngreso?.trim(),
+      diagnostico: asNullable(data.diagnostico),
+      accesorios: asNullable(data.accesorios),
       estado: data.estado,
       costo_estimado: data.costoEstimado,
       costo_final: data.costoFinal,
-      responsable: data.responsable,
-      notas: data.notas,
-    }).forEach(([column, value]) => {
+      responsable: asNullable(data.responsable),
+      notas: asNullable(data.notas),
+    }
+
+    Object.entries(ticketFields).forEach(([column, value]) => {
       if (value !== undefined) push(column, value)
     })
 
-    if (fields.length === 0) {
-      return res.status(400).json({ message: 'No hay datos para actualizar' })
+    if (fields.length > 0) {
+      values.push(id)
+      await client.query(
+        `
+          UPDATE repair_tickets
+          SET ${fields.join(', ')}, updated_at = NOW()
+          WHERE id = $${values.length}
+        `,
+        values,
+      )
     }
 
-    values.push(id)
-    const result = await pool.query(
-      `
-        UPDATE repair_tickets
-        SET ${fields.join(', ')}, updated_at = NOW()
-        WHERE id = $${values.length}
-        RETURNING *
-      `,
-      values,
-    )
+    if (data.client) {
+      const clientFields: string[] = []
+      const clientValues: unknown[] = []
+      const pushClient = (column: string, value: unknown) => {
+        clientFields.push(`${column} = $${clientValues.length + 1}`)
+        clientValues.push(value)
+      }
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'Reparación no encontrada' })
+      Object.entries({
+        nombre: data.client.nombre?.trim(),
+        documento: asNullable(data.client.documento),
+        telefono: asNullable(data.client.telefono),
+        email: asNullable(data.client.email),
+        direccion: asNullable(data.client.direccion),
+        notas: asNullable(data.client.notas),
+      }).forEach(([column, value]) => {
+        if (value !== undefined) pushClient(column, value)
+      })
+
+      if (clientFields.length > 0) {
+        clientValues.push(current.cliente.id)
+        await client.query(
+          `
+            UPDATE clients
+            SET ${clientFields.join(', ')}
+            WHERE id = $${clientValues.length}
+          `,
+          clientValues,
+        )
+      }
     }
 
+    if (data.estado && data.estado !== current.estado) {
+      await client.query(
+        `
+          INSERT INTO repair_updates (repair_id, estado, comentario, registrado_por)
+          VALUES ($1, $2, $3, $4)
+        `,
+        [id, data.estado, 'Estado actualizado desde la edicion', data.responsable ?? current.responsable ?? 'Administrador'],
+      )
+    }
+
+    await client.query('COMMIT')
     const repair = await fetchRepair(id)
     const updates = await fetchUpdates(id)
     res.json({ ...repair!, updates })
   } catch (error) {
+    if (transactionStarted) {
+      await client.query('ROLLBACK')
+    }
+    const knownError = handleRepairMutationError(error, res)
+    if (knownError) return
     next(error)
+  } finally {
+    client.release()
   }
 })
 
 router.post('/:id/updates', async (req, res, next) => {
+  const client = await pool.connect()
+  let transactionStarted = false
   try {
     const id = Number(req.params.id)
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ message: 'Id invalido' })
+    }
+
     const data = progressSchema.parse(req.body)
     const repair = await fetchRepair(id)
     if (!repair) {
-      return res.status(404).json({ message: 'Reparación no encontrada' })
+      return res.status(404).json({ message: 'Reparacion no encontrada' })
+    }
+    if (repair.estado === data.estado) {
+      return res.status(409).json({ message: 'La reparacion ya se encuentra en ese estado' })
     }
 
-    await pool.query('BEGIN')
-    await pool.query('UPDATE repair_tickets SET estado = $2, updated_at = NOW() WHERE id = $1', [id, data.estado])
-    const result = await pool.query(
+    await client.query('BEGIN')
+    transactionStarted = true
+    await client.query('UPDATE repair_tickets SET estado = $2, updated_at = NOW() WHERE id = $1', [id, data.estado])
+    const result = await client.query(
       `
         INSERT INTO repair_updates (repair_id, estado, comentario, registrado_por)
         VALUES ($1,$2,$3,$4)
         RETURNING id, repair_id AS "repairId", estado, comentario, registrado_por AS "registradoPor", created_at AS "createdAt"
       `,
-      [id, data.estado, data.comentario ?? null, data.registradoPor ?? null],
+      [id, data.estado, asNullable(data.comentario), asNullable(data.registradoPor)],
     )
-    await pool.query('COMMIT')
+    await client.query('COMMIT')
     res.status(201).json(result.rows[0])
   } catch (error) {
-    await pool.query('ROLLBACK')
+    if (transactionStarted) {
+      await client.query('ROLLBACK')
+    }
     next(error)
+  } finally {
+    client.release()
   }
 })
 
 router.get('/:id/sticker', async (req, res, next) => {
   try {
     const id = Number(req.params.id)
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ message: 'Id invalido' })
+    }
+
     const repair = await fetchRepair(id)
     if (!repair) {
-      return res.status(404).json({ message: 'Reparación no encontrada' })
+      return res.status(404).json({ message: 'Reparacion no encontrada' })
     }
 
     const pdf = await createRepairSticker({
@@ -365,7 +446,7 @@ export default router
 type RepairRecord = {
   id: number
   codigo: string
-  estado: string
+  estado: RepairStatus
   dispositivoTipo: string | null
   marca: string | null
   modelo: string | null
@@ -387,16 +468,20 @@ type RepairRecord = {
     documento: string | null
     telefono: string | null
     email: string | null
+    direccion: string | null
+    notas: string | null
   }
 }
 
 type RepairUpdateRecord = {
   id: number
-  estado: string
+  estado: RepairStatus
   comentario: string | null
   registradoPor: string | null
   createdAt: Date
 }
+
+type RepairStatus = z.infer<typeof statusEnum>
 
 async function fetchRepair(id: number): Promise<RepairRecord | null> {
   return fetchRepairByCondition('rt.id = $1', [id])
@@ -432,7 +517,9 @@ async function fetchRepairByCondition(where: string, values: unknown[]): Promise
         c.nombre AS "clienteNombre",
         c.documento AS "clienteDocumento",
         c.telefono AS "clienteTelefono",
-        c.email AS "clienteEmail"
+        c.email AS "clienteEmail",
+        c.direccion AS "clienteDireccion",
+        c.notas AS "clienteNotas"
       FROM repair_tickets rt
       INNER JOIN clients c ON c.id = rt.cliente_id
       WHERE ${where}
@@ -467,6 +554,8 @@ async function fetchRepairByCondition(where: string, values: unknown[]): Promise
       documento: row.clienteDocumento,
       telefono: row.clienteTelefono,
       email: row.clienteEmail,
+      direccion: row.clienteDireccion,
+      notas: row.clienteNotas,
     },
   }
 }
@@ -482,7 +571,7 @@ async function fetchUpdates(id: number): Promise<RepairUpdateRecord[]> {
         created_at AS "createdAt"
       FROM repair_updates
       WHERE repair_id = $1
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, id DESC
     `,
     [id],
   )
@@ -498,11 +587,11 @@ async function createClientFromPayload(conn: PoolClient, payload: z.infer<typeof
     `,
     [
       payload.nombre.trim(),
-      payload.documento?.trim() ?? null,
-      payload.telefono?.trim() ?? null,
-      payload.email?.trim() ?? null,
-      payload.direccion?.trim() ?? null,
-      payload.notas ?? null,
+      asNullable(payload.documento),
+      asNullable(payload.telefono),
+      asNullable(payload.email),
+      asNullable(payload.direccion),
+      asNullable(payload.notas),
     ],
   )
   return result.rows[0].id as number
@@ -511,9 +600,44 @@ async function createClientFromPayload(conn: PoolClient, payload: z.infer<typeof
 async function generateRepairCode(conn: PoolClient) {
   const result = await conn.query<{ seq: string }>(`SELECT LPAD(nextval('repair_ticket_seq')::text, 4, '0') AS seq`)
   const now = new Date()
-  const code = `RPR-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(
+  return `RPR-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(
     2,
     '0',
   )}-${result.rows[0].seq}`
-  return code
+}
+
+function mapRepairTrackingResponse(repair: RepairRecord, updates: RepairUpdateRecord[]) {
+  return {
+    codigo: repair.codigo,
+    estado: repair.estado,
+    dispositivo: [repair.marca, repair.modelo].filter(Boolean).join(' ') || repair.dispositivoTipo || 'Equipo',
+    motivoIngreso: repair.motivoIngreso,
+    diagnostico: repair.diagnostico,
+    accesorios: repair.accesorios,
+    createdAt: repair.createdAt,
+    updatedAt: repair.updatedAt,
+    updates: updates.map((update) => ({
+      id: update.id,
+      estado: update.estado,
+      comentario: update.comentario,
+      createdAt: update.createdAt,
+    })),
+  }
+}
+
+function asNullable(value?: string | null) {
+  if (value === undefined) return undefined
+  if (value === null) return null
+
+  const trimmed = value.trim()
+  return trimmed ? trimmed : null
+}
+
+function handleRepairMutationError(error: unknown, res: Response) {
+  const databaseError = error as DatabaseError | undefined
+  if (databaseError?.code === '23505') {
+    return res.status(409).json({ message: 'Ya existe un cliente con ese documento' })
+  }
+
+  return null
 }

@@ -1,9 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /admin
-Disallow: /admin/
-Disallow: /admin/facturacion
-Disallow: /admin/reparaciones
-Disallow: /admin/devoluciones
-
-Sitemap: https://doctorcell.com/sitemap.xml
