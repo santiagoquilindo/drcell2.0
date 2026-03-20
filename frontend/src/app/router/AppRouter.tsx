@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { ProtectedRoute } from '@features/admin/auth/ProtectedRoute'
 import { AdminLoginPage } from '@features/admin/auth/AdminLoginPage'
+import { AdminInventoryPage } from '@features/admin/inventory/AdminInventoryPage'
 import { AdminLayout } from '@features/admin/layout/AdminLayout'
 import { AdminProductsPage } from '@features/admin/products/AdminProductsPage'
 import { AdminRepairsPage } from '@features/admin/repairs/AdminRepairsPage'
@@ -14,7 +15,8 @@ export function AppRouter() {
     <Routes>
       <Route element={<PublicLayout />}>
         <Route path="/" element={<CatalogPage />} />
-        <Route path="/tracking" element={<TrackingPage />} />
+        <Route path="/seguimiento" element={<TrackingPage />} />
+        <Route path="/tracking" element={<Navigate to="/seguimiento" replace />} />
       </Route>
 
       <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -28,6 +30,7 @@ export function AppRouter() {
       >
         <Route index element={<Navigate to="/admin/products" replace />} />
         <Route path="products" element={<AdminProductsPage />} />
+        <Route path="inventory" element={<AdminInventoryPage />} />
         <Route path="repairs" element={<AdminRepairsPage />} />
       </Route>
 

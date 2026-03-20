@@ -13,7 +13,7 @@ export function PublicLayout() {
 
           <nav className="public-nav">
             <NavLink to="/">Catalogo</NavLink>
-            <NavLink to="/tracking">Seguimiento</NavLink>
+            <NavLink to="/seguimiento">Seguimiento</NavLink>
           </nav>
         </div>
       </header>

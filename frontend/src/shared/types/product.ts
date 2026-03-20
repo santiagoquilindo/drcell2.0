@@ -8,6 +8,9 @@ export type Product = {
   categoria: ProductCategory
   precio: number
   stock: number
+  stockManual: number
+  inventarioItemId: number | null
+  inventarioItemNombre: string | null
   activo: boolean
   imagenUrl: string | null
   createdAt: string
@@ -20,6 +23,7 @@ export type ProductPayload = {
   categoria: ProductCategory
   precio: number
   stock: number
+  inventarioItemId?: number | null
   activo: boolean
   imagen?: string
 }

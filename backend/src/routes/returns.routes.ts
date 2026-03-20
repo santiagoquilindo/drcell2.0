@@ -193,6 +193,54 @@ router.post('/', async (req, res, next) => {
   }
 })
 
+router.get('/report/export', async (req, res, next) => {
+  try {
+    const { estado, desde, hasta } = reportQuerySchema.parse(req.query)
+    const where: string[] = []
+    const values: unknown[] = []
+    if (estado) {
+      values.push(estado)
+      where.push(`d.estado = $${values.length}`)
+    }
+    if (desde) {
+      values.push(new Date(desde))
+      where.push(`d.created_at >= $${values.length}`)
+    }
+    if (hasta) {
+      values.push(new Date(hasta))
+      where.push(`d.created_at <= $${values.length}`)
+    }
+    const rows = await pool.query(
+      `
+        SELECT
+          d.codigo,
+          d.estado,
+          d.motivo,
+          d.diagnostico,
+          d.created_at,
+          d.updated_at,
+          d.sla_proveedor,
+          d.resultado_final,
+          p.nombre AS proveedor,
+          c.nombre AS cliente
+        FROM devoluciones d
+        LEFT JOIN proveedores p ON p.id = d.proveedor_id
+        LEFT JOIN clients c ON c.id = d.cliente_id
+        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+        ORDER BY d.created_at DESC
+      `,
+      values,
+    )
+
+    const csv = buildCsv(rows.rows)
+    res.setHeader('Content-Type', 'text/csv')
+    res.setHeader('Content-Disposition', 'attachment; filename="devoluciones.csv"')
+    res.send(csv)
+  } catch (error) {
+    next(error)
+  }
+})
+
 router.get('/:id', async (req, res, next) => {
   try {
     const id = Number(req.params.id)
@@ -401,54 +449,6 @@ router.post('/:id/cerrar', async (req, res, next) => {
     next(error)
   } finally {
     client.release()
-  }
-})
-
-router.get('/report/export', async (req, res, next) => {
-  try {
-    const { estado, desde, hasta } = reportQuerySchema.parse(req.query)
-    const where: string[] = []
-    const values: unknown[] = []
-    if (estado) {
-      values.push(estado)
-      where.push(`d.estado = $${values.length}`)
-    }
-    if (desde) {
-      values.push(new Date(desde))
-      where.push(`d.created_at >= $${values.length}`)
-    }
-    if (hasta) {
-      values.push(new Date(hasta))
-      where.push(`d.created_at <= $${values.length}`)
-    }
-    const rows = await pool.query(
-      `
-        SELECT
-          d.codigo,
-          d.estado,
-          d.motivo,
-          d.diagnostico,
-          d.created_at,
-          d.updated_at,
-          d.sla_proveedor,
-          d.resultado_final,
-          p.nombre AS proveedor,
-          c.nombre AS cliente
-        FROM devoluciones d
-        LEFT JOIN proveedores p ON p.id = d.proveedor_id
-        LEFT JOIN clients c ON c.id = d.cliente_id
-        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-        ORDER BY d.created_at DESC
-      `,
-      values,
-    )
-
-    const csv = buildCsv(rows.rows)
-    res.setHeader('Content-Type', 'text/csv')
-    res.setHeader('Content-Disposition', 'attachment; filename="devoluciones.csv"')
-    res.send(csv)
-  } catch (error) {
-    next(error)
   }
 })
 

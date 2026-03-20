@@ -18,6 +18,27 @@ export type RepairUpdate = {
   createdAt: string
 }
 
+export type RepairPartStatus = 'consumido' | 'revertido'
+
+export type RepairPart = {
+  id: number
+  repairId: number
+  inventoryItemId: number
+  itemNombre: string
+  itemSku: string
+  cantidad: number
+  costoUnitarioReferencial: number
+  precioUnitarioReferencial: number
+  estado: RepairPartStatus
+  notas: string | null
+  inventoryMovementId: number | null
+  reversalMovementId: number | null
+  createdByAdminUserId: number | null
+  revertedByAdminUserId: number | null
+  createdAt: string
+  revertedAt: string | null
+}
+
 export type PublicRepairUpdate = {
   id: number
   estado: RepairStatus
@@ -40,6 +61,8 @@ export type RepairSummary = {
   clienteNombre: string
   clienteTelefono: string | null
   costoEstimado: number
+  manoObra: number
+  subtotalRepuestos: number
   costoFinal: number
 }
 
@@ -57,6 +80,8 @@ export type Repair = {
   diagnostico: string | null
   accesorios: string | null
   costoEstimado: number
+  manoObra: number
+  subtotalRepuestos: number
   costoFinal: number
   responsable: string | null
   notas: string | null
@@ -64,6 +89,7 @@ export type Repair = {
   updatedAt: string
   cliente: RepairClient
   updates: RepairUpdate[]
+  parts: RepairPart[]
 }
 
 export type RepairTracking = {
@@ -100,6 +126,7 @@ export type RepairPayload = {
   accesorios?: string
   estado?: RepairStatus
   costoEstimado?: number
+  manoObra?: number
   costoFinal?: number
   responsable?: string
   notas?: string
@@ -109,4 +136,10 @@ export type RepairUpdatePayload = {
   estado: RepairStatus
   comentario?: string
   registradoPor?: string
+}
+
+export type RepairPartPayload = {
+  inventoryItemId: number
+  cantidad: number
+  notas?: string
 }

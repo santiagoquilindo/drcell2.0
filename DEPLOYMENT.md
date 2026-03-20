@@ -1,95 +1,126 @@
-﻿# Despliegue de Dr Cell
+# Despliegue de Dr Cell
 
-Guía para preparar una publicación del backend (API Node/Express) y del frontend (React + Vite). El monorepo permite desplegar cada parte de forma independiente.
+Guia corta para publicar backend y frontend del monorepo.
 
----
-
-## 1. Backend (API Express)
-
-### Requisitos
-
-- Node.js 20+
-- PostgreSQL accesible desde el servidor
+## 1. Backend
 
 ### Variables de entorno
 
 Duplica `backend/.env.example` y ajusta:
 
-| Variable | Descripción |
+| Variable | Descripcion |
 | --- | --- |
-| `PORT` | Puerto HTTP del API (p.ej., `4000`). |
-| `DATABASE_URL` | Cadena de conexión a PostgreSQL (incluye usuario, contraseña, host y base). |
-| `CORS_ORIGIN` | Lista separada por comas con los orígenes permitidos (dominio público del frontend). |
-| `ADMIN_API_KEY` | Token que se envía en el header `x-api-key` para rutas protegidas. |
-| `PUBLIC_APP_URL` | URL pública donde vive el frontend (se usa para los QR de seguimiento). |
-| `OPENAI_API_KEY` | (Opcional) clave para activar el asistente IA. |
-| `BUSINESS_*` | Datos mostrados en facturas/stickers. |
+| `PORT` | Puerto HTTP del API. |
+| `DATABASE_URL` | Conexion a PostgreSQL. |
+| `CORS_ORIGIN` | Origenes permitidos del frontend. |
+| `SESSION_COOKIE_NAME` | Nombre de la cookie de sesion admin. |
+| `SESSION_TTL_HOURS` | Duracion de la sesion en horas. |
+| `SESSION_COOKIE_DOMAIN` | Dominio compartido de la cookie si aplica. |
+| `SESSION_COOKIE_SAME_SITE` | Politica `SameSite` de la cookie. |
+| `SESSION_COOKIE_SECURE` | Fuerza `Secure` en la cookie. |
+| `TRUST_PROXY` | Activa `trust proxy` detras de Nginx/Cloudflare/Render/Fly. |
+| `UPLOADS_DIR` | Directorio persistente para imagenes. |
+| `PUBLIC_APP_URL` | URL publica del frontend usada en los QR de seguimiento. |
+| `OPENAI_API_KEY` | Opcional para el asistente IA. |
+| `BUSINESS_*` | Datos impresos en facturas y stickers. |
 
-### Instalación y compilación
+### Autenticacion real
+
+- El acceso administrativo usa `POST /api/auth/login`.
+- El backend crea una cookie `HttpOnly` y persiste la sesion en `admin_sessions`.
+- `ADMIN_API_KEY` y `x-api-key` quedan obsoletos para el flujo vigente.
+
+### Instalacion y build
 
 ```bash
 cd backend
 npm install
-npm run build    # genera dist/
-```
-
-Para ejecutar en producción:
-
-```bash
+npm run build
 node dist/index.js
 ```
 
-> **Recuerda** inicializar tu base con `sql/001_init.sql` y `sql/002_inventory.sql` si todavía no existen las tablas.
+### Base de datos
 
-### Supervisión
-
-En un servidor Linux puedes usar PM2, systemd o el manejador de procesos de tu proveedor cloud:
+Ejecuta todos los SQL vigentes:
 
 ```bash
-pm2 start dist/index.js --name doctorcel-api
+psql -d doctorcel -f sql/001_init.sql
+psql -d doctorcel -f sql/002_inventory.sql
+psql -d doctorcel -f sql/003_invoices.sql
+psql -d doctorcel -f sql/004_repairs.sql
+psql -d doctorcel -f sql/005_returns.sql
+psql -d doctorcel -f sql/006_diagnostic.sql
+psql -d doctorcel -f sql/007_retention_cleanup.sql
+psql -d doctorcel -f sql/008_phase1_auth_products.sql
+psql -d doctorcel -f sql/009_inventory_module.sql
 ```
 
----
+Crear admin inicial:
 
-## 2. Frontend (Vite + React)
+```bash
+cd backend
+npm run create-admin -- admin@dr-cell.com TuPasswordSegura "Administrador Dr Cell"
+```
+
+## 2. Frontend
 
 ### Variables de entorno
 
 Edita `frontend/.env`:
 
-| Variable | Descripción |
+| Variable | Descripcion |
 | --- | --- |
-| `VITE_API_URL` | URL pública del backend (incluye `/api`). Ejemplo: `https://api.doctorcel.com/api`. |
+| `VITE_API_URL` | URL publica del backend incluyendo `/api`. |
+| `VITE_WHATSAPP_NUMBER` | Numero comercial para el carrito. |
 
-### Build estático
+### Build estatico
 
 ```bash
 cd frontend
 npm install
-npm run build   # genera dist/ listo para cualquier hosting estático
+npm run build
 ```
 
-El contenido de `frontend/dist/` se puede subir a Netlify, Vercel, Cloudflare Pages, un bucket S3 + CloudFront, etc. Para una vista previa local:
+Para panel en despliegue separado:
 
 ```bash
-npm run preview -- --host 0.0.0.0 --port 4173
+cd frontend
+npm run build:admin
 ```
 
----
+## 3. Rutas vigentes a verificar
 
-## 3. Checklist antes de publicar
+- `/`
+- `/seguimiento`
+- `/admin/login`
+- `/admin/products`
+- `/admin/inventory`
+- `/admin/repairs`
 
-- [ ] `PUBLIC_APP_URL` apunta al dominio real (no `localhost`) y el QR del sticker abre `https://tu-dominio/seguimiento?ticket=...`.
-- [ ] `CORS_ORIGIN` incluye los dominios desde los que se servirá el frontend.
-- [ ] `VITE_API_URL` coincide con la URL HTTPS del backend.
-- [ ] La base PostgreSQL tiene los scripts de inicialización ejecutados.
-- [ ] `npm run build` funciona en backend y frontend (sin warnings rojos).
-- [ ] Para accesos administrativos, la API key (`ADMIN_API_KEY`) está almacenada en un lugar seguro (por ejemplo, variable secreta en el host).
+Compatibilidad:
 
-Con estos pasos el proyecto queda listo para subirse a cualquier plataforma (Railway, Render, DigitalOcean, AWS, etc.) manteniendo frontend y backend desacoplados pero comunicándose vía HTTPS.
-- Programa una tarea (cron/scheduler en Render/Railway/Fly) que ejecute `sql/007_retention_cleanup.sql` cada noche para eliminar registros mayores a 60 días (reparaciones, facturas, devoluciones).
+- `/tracking` redirige a `/seguimiento`.
 
-### Despliegue separado para sitio y panel
-1. Ejecuta cd frontend && npm run build y despliega la carpeta rontend/dist en tu dominio público.
-2. Ejecuta cd frontend && npm run build:admin para generar rontend/dist-admin (donde index.html ya es la versión administrativa) y despliega esa carpeta en tu subdominio de panel.
-3. Actualiza VITE_API_URL en ambos sitios para apuntar al backend (Render) y ajusta CORS_ORIGIN en el backend para incluir los dos dominios.
+## 4. Checklist antes de publicar
+
+- `PUBLIC_APP_URL` apunta al dominio real.
+- El QR del sticker abre `https://tu-dominio/seguimiento?ticket=...&verifier=....`.
+- `CORS_ORIGIN` incluye los dominios reales del frontend.
+- `VITE_API_URL` coincide con la URL HTTPS del backend.
+- La base PostgreSQL tiene ejecutados todos los SQL vigentes.
+- `npm run build` funciona en backend y frontend.
+- El login admin y la cookie de sesion funcionan sobre el dominio real.
+- `SESSION_COOKIE_*` y `TRUST_PROXY` estan alineados con el despliegue real.
+
+## 5. Uploads
+
+- Las imagenes viven en el filesystem del backend.
+- `UPLOADS_DIR` debe apuntar a un volumen persistente.
+- Productos se guardan en `/uploads/products`.
+- Inventario se guarda en `/uploads/inventory`.
+
+## 6. Operacion recomendada
+
+- Programa una tarea periodica para `sql/007_retention_cleanup.sql`.
+- Mantén backups de PostgreSQL.
+- Revisa que el dominio y la cookie compartan configuracion correcta antes de abrir el panel al publico.

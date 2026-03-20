@@ -1,17 +1,11 @@
 # Despliegue Dr. Cell
 
-## 1. Estructura esperada en producción
+## 1. Estructura esperada en produccion
 
 - Backend Node.js compilado con `npm run build`
 - Frontend compilado con `npm run build`
 - PostgreSQL accesible desde el backend
-- Directorio persistente para imágenes de productos montado en el backend
-
-Recomendación mínima:
-
-- Frontend servido como estático desde Nginx, Vercel o un host similar
-- Backend servido como proceso Node detrás de Nginx o un proxy inverso
-- `UPLOADS_DIR` apuntando a un volumen persistente
+- Directorio persistente para imagenes en el backend
 
 ## 2. Variables de entorno backend
 
@@ -40,9 +34,9 @@ OPENAI_API_KEY=
 
 Notas:
 
-- Si frontend y backend viven bajo el mismo dominio raíz, `SESSION_COOKIE_DOMAIN=.dr-cell.com` funciona bien.
+- Si frontend y backend viven bajo el mismo dominio raiz, `SESSION_COOKIE_DOMAIN=.dr-cell.com` funciona bien.
 - Si se usan dominios completamente distintos, revisa `SESSION_COOKIE_SAME_SITE=none` y `SESSION_COOKIE_SECURE=true`.
-- `TRUST_PROXY=true` es importante si el backend queda detrás de Nginx/Cloudflare/Render/Fly/otra capa proxy.
+- `TRUST_PROXY=true` es importante detras de proxy inverso.
 
 ## 3. Variables de entorno frontend
 
@@ -64,6 +58,7 @@ psql -d doctorcel -f sql/005_returns.sql
 psql -d doctorcel -f sql/006_diagnostic.sql
 psql -d doctorcel -f sql/007_retention_cleanup.sql
 psql -d doctorcel -f sql/008_phase1_auth_products.sql
+psql -d doctorcel -f sql/009_inventory_module.sql
 ```
 
 Crear admin inicial:
@@ -82,11 +77,11 @@ npm run build
 npm run start:prod
 ```
 
-Healthcheck disponible:
+Healthcheck:
 
 - `GET /api/health`
 
-## 6. Build y publicación frontend
+## 6. Build y publicacion frontend
 
 ```bash
 cd frontend
@@ -94,21 +89,22 @@ npm install
 npm run build:prod
 ```
 
-Publica el contenido de `frontend/dist/`.
+Publica `frontend/dist/`.
 
 Rutas a verificar:
 
 - `/`
-- `/tracking`
+- `/seguimiento`
 - `/admin/login`
 - `/admin/products`
+- `/admin/inventory`
 - `/admin/repairs`
 
-## 7. Estrategia mínima de uploads
+Compatibilidad:
 
-En esta etapa, las imágenes viven en el filesystem del backend.
+- `/tracking` redirige a `/seguimiento`.
 
-Recomendación mínima segura:
+## 7. Estrategia minima de uploads
 
 - crear un directorio persistente fuera del release temporal
 - montar ese directorio como `UPLOADS_DIR`
@@ -117,22 +113,22 @@ Recomendación mínima segura:
 Ejemplo:
 
 - `UPLOADS_DIR=/var/www/drcell/uploads`
-- archivos de producto en `/var/www/drcell/uploads/products`
-
-Si el servidor se recrea sin persistencia, se perderán las imágenes. Ese es el principal riesgo operativo pendiente de esta estrategia local.
+- `/var/www/drcell/uploads/products`
+- `/var/www/drcell/uploads/inventory`
 
 ## 8. Checklist manual end-to-end
 
 - login admin
 - CRUD de productos
-- ver imágenes de productos en catálogo público
+- inventario: listado, detalle, creacion, edicion y movimientos
+- ver imagenes de productos en catalogo publico
 - agregar al carrito
 - abrir mensaje de WhatsApp
-- crear reparación
-- editar reparación
+- crear reparacion
+- editar reparacion
 - cambiar estado
-- consultar tracking por código
+- consultar seguimiento por QR o por codigo
 
 ## 9. Siguiente mejora recomendada
 
-En una siguiente etapa conviene decidir si el sticker/PDF de reparación se expone desde la UI admin y si los uploads migran a un storage externo o volumen administrado.
+La siguiente etapa natural es decidir la integracion real entre stock comercial (`productos`) e inventario operativo (`inventario_items`), y definir si devoluciones/facturas tendran frontend propio.

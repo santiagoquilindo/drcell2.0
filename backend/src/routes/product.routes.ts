@@ -34,6 +34,7 @@ const productSchema = z.object({
   categoria: z.enum(['nuevos', 'usados', 'accesorios']),
   precio: z.coerce.number().positive(),
   stock: z.coerce.number().int().nonnegative().default(0),
+  inventarioItemId: z.number().int().positive().nullable().optional(),
   activo: z.coerce.boolean().default(true),
   imagen: dataUrlImageSchema,
 })
@@ -43,22 +44,29 @@ router.get('/admin/all', requireAdmin, async (_req, res, next) => {
     const result = await pool.query(
       `
         SELECT
-          id,
-          nombre,
-          slug,
-          descripcion,
-          categoria,
-          precio,
-          stock,
-          activo,
-          COALESCE(image_path, imagen_url) AS "imagenUrl",
-          created_at AS "createdAt",
-          updated_at AS "updatedAt"
-        FROM productos
-        ORDER BY created_at DESC
+          p.id,
+          p.nombre,
+          p.slug,
+          p.descripcion,
+          p.categoria,
+          p.precio,
+          CASE
+            WHEN p.inventario_item_id IS NOT NULL THEN COALESCE(i.stock_actual, 0)
+            ELSE p.stock
+          END AS stock,
+          p.stock AS "stockManual",
+          p.inventario_item_id AS "inventarioItemId",
+          i.nombre AS "inventarioItemNombre",
+          p.activo,
+          COALESCE(p.image_path, p.imagen_url) AS "imagenUrl",
+          p.created_at AS "createdAt",
+          p.updated_at AS "updatedAt"
+        FROM productos p
+        LEFT JOIN inventario_items i ON i.id = p.inventario_item_id
+        ORDER BY p.created_at DESC
       `,
     )
-    res.json(result.rows)
+    res.json(result.rows.map(mapProductRow))
   } catch (error) {
     next(error)
   }
@@ -69,23 +77,30 @@ router.get('/', async (_req, res, next) => {
     const result = await pool.query(
       `
         SELECT
-          id,
-          nombre,
-          slug,
-          descripcion,
-          categoria,
-          precio,
-          stock,
-          activo,
-          COALESCE(image_path, imagen_url) AS "imagenUrl",
-          created_at AS "createdAt",
-          updated_at AS "updatedAt"
-        FROM productos
-        WHERE activo = TRUE
-        ORDER BY created_at DESC
+          p.id,
+          p.nombre,
+          p.slug,
+          p.descripcion,
+          p.categoria,
+          p.precio,
+          CASE
+            WHEN p.inventario_item_id IS NOT NULL THEN COALESCE(i.stock_actual, 0)
+            ELSE p.stock
+          END AS stock,
+          p.stock AS "stockManual",
+          p.inventario_item_id AS "inventarioItemId",
+          i.nombre AS "inventarioItemNombre",
+          p.activo,
+          COALESCE(p.image_path, p.imagen_url) AS "imagenUrl",
+          p.created_at AS "createdAt",
+          p.updated_at AS "updatedAt"
+        FROM productos p
+        LEFT JOIN inventario_items i ON i.id = p.inventario_item_id
+        WHERE p.activo = TRUE
+        ORDER BY p.created_at DESC
       `,
     )
-    res.json(result.rows)
+    res.json(result.rows.map(mapProductRow))
   } catch (error) {
     next(error)
   }
@@ -95,12 +110,13 @@ router.post('/', requireAdmin, async (req, res, next) => {
   let imagePath: string | null = null
   try {
     const data = productSchema.parse(req.body)
+    await ensureLinkedInventoryItem(data.inventarioItemId ?? null)
     imagePath = await saveProductImage(data.imagen)
     const slug = await generateUniqueSlug(data.nombre)
     const result = await pool.query(
       `
-        INSERT INTO productos (nombre, slug, descripcion, categoria, precio, stock, activo, image_path)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO productos (nombre, slug, descripcion, categoria, precio, stock, inventario_item_id, activo, image_path)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING
           id,
           nombre,
@@ -108,7 +124,6 @@ router.post('/', requireAdmin, async (req, res, next) => {
           descripcion,
           categoria,
           precio,
-          stock,
           activo,
           COALESCE(image_path, imagen_url) AS "imagenUrl",
           created_at AS "createdAt",
@@ -121,15 +136,21 @@ router.post('/', requireAdmin, async (req, res, next) => {
         data.categoria,
         data.precio,
         data.stock,
+        data.inventarioItemId ?? null,
         data.activo,
         imagePath,
       ],
     )
-    res.status(201).json(result.rows[0])
+    const product = await fetchProductById(result.rows[0].id)
+    if (!product) {
+      throw new Error('No se pudo cargar el producto creado')
+    }
+    res.status(201).json(product)
   } catch (error) {
     if (error instanceof Error && imagePath) {
       await deleteProductImage(imagePath)
     }
+    if (handleProductError(error, res)) return
     next(error)
   }
 })
@@ -143,6 +164,7 @@ router.put('/:id', requireAdmin, async (req, res, next) => {
       return res.status(400).json({ message: 'Id invalido' })
     }
     const data = productSchema.parse(req.body)
+    await ensureLinkedInventoryItem(data.inventarioItemId ?? null)
     const current = await pool.query<{ imagePath: string | null }>(
       'SELECT COALESCE(image_path, imagen_url) AS "imagePath" FROM productos WHERE id = $1',
       [id],
@@ -162,22 +184,12 @@ router.put('/:id', requireAdmin, async (req, res, next) => {
             categoria = $4,
             precio = $5,
             stock = $6,
-            activo = $7,
-            image_path = $8,
+            inventario_item_id = $7,
+            activo = $8,
+            image_path = $9,
             updated_at = NOW()
-        WHERE id = $9
-        RETURNING
-          id,
-          nombre,
-          slug,
-          descripcion,
-          categoria,
-          precio,
-          stock,
-          activo,
-          COALESCE(image_path, imagen_url) AS "imagenUrl",
-          created_at AS "createdAt",
-          updated_at AS "updatedAt"
+        WHERE id = $10
+        RETURNING id
       `,
       [
         data.nombre.trim(),
@@ -186,6 +198,7 @@ router.put('/:id', requireAdmin, async (req, res, next) => {
         data.categoria,
         data.precio,
         data.stock,
+        data.inventarioItemId ?? null,
         data.activo,
         imagePath,
         id,
@@ -194,11 +207,16 @@ router.put('/:id', requireAdmin, async (req, res, next) => {
     if (data.imagen && previousImagePath) {
       await deleteProductImage(previousImagePath)
     }
-    res.json(result.rows[0])
+    const product = await fetchProductById(result.rows[0].id)
+    if (!product) {
+      throw new Error('No se pudo cargar el producto actualizado')
+    }
+    res.json(product)
   } catch (error) {
     if (imagePath && imagePath !== previousImagePath) {
       await deleteProductImage(imagePath)
     }
+    if (handleProductError(error, res)) return
     next(error)
   }
 })
@@ -227,6 +245,64 @@ router.delete('/:id', requireAdmin, async (req, res, next) => {
 })
 
 export default router
+
+async function fetchProductById(id: number, client: PoolLike = pool) {
+  const result = await client.query(
+    `
+      SELECT
+        p.id,
+        p.nombre,
+        p.slug,
+        p.descripcion,
+        p.categoria,
+        p.precio,
+        CASE
+          WHEN p.inventario_item_id IS NOT NULL THEN COALESCE(i.stock_actual, 0)
+          ELSE p.stock
+        END AS stock,
+        p.stock AS "stockManual",
+        p.inventario_item_id AS "inventarioItemId",
+        i.nombre AS "inventarioItemNombre",
+        p.activo,
+        COALESCE(p.image_path, p.imagen_url) AS "imagenUrl",
+        p.created_at AS "createdAt",
+        p.updated_at AS "updatedAt"
+      FROM productos p
+      LEFT JOIN inventario_items i ON i.id = p.inventario_item_id
+      WHERE p.id = $1
+      LIMIT 1
+    `,
+    [id],
+  )
+
+  return result.rows[0] ? mapProductRow(result.rows[0]) : null
+}
+
+type PoolLike = {
+  query: typeof pool.query
+}
+
+async function ensureLinkedInventoryItem(id: number | null, client: PoolLike = pool) {
+  if (!id) return
+
+  const result = await client.query<{ id: number; estado: string }>(
+    `
+      SELECT id, estado
+      FROM inventario_items
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [id],
+  )
+
+  if (result.rowCount === 0) {
+    throw new Error('El item de inventario vinculado no existe')
+  }
+
+  if (result.rows[0].estado !== 'activo') {
+    throw new Error('Solo puedes vincular items de inventario activos')
+  }
+}
 
 const productUploadsDirectory = path.resolve(process.cwd(), env.UPLOADS_DIR, 'products')
 
@@ -275,4 +351,24 @@ async function deleteProductImage(imagePath: string) {
   const filename = path.basename(imagePath)
   const absolutePath = path.join(productUploadsDirectory, filename)
   await fs.rm(absolutePath, { force: true })
+}
+
+function mapProductRow(row: Record<string, unknown>) {
+  return {
+    ...row,
+    precio: Number(row.precio ?? 0),
+    stock: Number(row.stock ?? 0),
+    stockManual: Number(row.stockManual ?? 0),
+  }
+}
+
+function handleProductError(error: unknown, res: { status: (code: number) => { json: (body: { message: string }) => unknown } }) {
+  if (
+    error instanceof Error &&
+    ['El item de inventario vinculado no existe', 'Solo puedes vincular items de inventario activos'].includes(error.message)
+  ) {
+    return res.status(400).json({ message: error.message })
+  }
+
+  return null
 }

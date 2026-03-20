@@ -2,8 +2,8 @@
 
 Monorepo con dos aplicaciones:
 
-- `frontend/`: React + Vite para catálogo público, tracking y panel admin.
-- `backend/`: Express + PostgreSQL para auth admin, productos, reparaciones e inventario.
+- `frontend/`: React + Vite para catalogo publico, seguimiento y panel admin.
+- `backend/`: Express + PostgreSQL para autenticacion admin, productos, inventario, reparaciones, facturas, devoluciones y asistente.
 
 ## Requisitos
 
@@ -26,6 +26,7 @@ psql -d doctorcel -f sql/005_returns.sql
 psql -d doctorcel -f sql/006_diagnostic.sql
 psql -d doctorcel -f sql/007_retention_cleanup.sql
 psql -d doctorcel -f sql/008_phase1_auth_products.sql
+psql -d doctorcel -f sql/009_inventory_module.sql
 npm run create-admin -- admin@drcell.com TuPasswordSegura "Administrador Dr Cell"
 npm run dev
 ```
@@ -54,13 +55,16 @@ Frontend:
 - `npm run dev`
 - `npm run build`
 - `npm run build:prod`
+- `npm run build:admin`
 - `npm run preview`
 - `npm run preview:prod`
 
-## Variables de entorno clave
+## Variables de entorno reales
 
 Backend:
 
+- `NODE_ENV`
+- `PORT`
 - `DATABASE_URL`
 - `CORS_ORIGIN`
 - `SESSION_COOKIE_NAME`
@@ -70,23 +74,59 @@ Backend:
 - `SESSION_COOKIE_SECURE`
 - `TRUST_PROXY`
 - `UPLOADS_DIR`
+- `BUSINESS_NAME`
+- `BUSINESS_TRADE_NAME`
+- `BUSINESS_TAX_ID`
+- `BUSINESS_ADDRESS`
+- `BUSINESS_PHONE`
+- `BUSINESS_EMAIL`
 - `PUBLIC_APP_URL`
+- `OPENAI_API_KEY`
 
 Frontend:
 
 - `VITE_API_URL`
 - `VITE_WHATSAPP_NUMBER`
 
-## Producción
+## Autenticacion vigente
 
-La guía completa de despliegue está en:
+- El backend usa sesiones persistidas en `admin_sessions`.
+- `POST /api/auth/login` valida email y password y emite una cookie `HttpOnly`.
+- `GET /api/auth/me` y las rutas admin dependen de `requireAdmin`.
+- `ADMIN_API_KEY` y `x-api-key` ya no son el mecanismo vigente.
+
+## Rutas principales vigentes
+
+Frontend:
+
+- `/`
+- `/seguimiento`
+- `/admin/login`
+- `/admin/products`
+- `/admin/inventory`
+- `/admin/repairs`
+
+Backend:
+
+- `/api/auth/*`
+- `/api/products`
+- `/api/inventory/*`
+- `/api/providers`
+- `/api/clients`
+- `/api/repairs/*`
+- `/api/invoices/*`
+- `/api/returns/*`
+- `/api/assistant/diagnostic`
+- `/api/health`
+
+## Notas de compatibilidad
+
+- `/tracking` se mantiene solo como redireccion hacia `/seguimiento`.
+- El esquema vigente de inventario usa `inventario_items.image_path`; el modulo ya no depende de `inventario_items.imagen_url`.
+
+## Produccion
+
+La guia completa de despliegue esta en:
 
 - [docs/DEPLOY.md](/Users/Personal/Documents/d/proyectos%20nuevos/dr%20cell%20git%20hub/drcell/docs/DEPLOY.md)
 - [docs/PRELAUNCH.md](/Users/Personal/Documents/d/proyectos%20nuevos/dr%20cell%20git%20hub/drcell/docs/PRELAUNCH.md)
-
-## Estado actual
-
-- Fase 1: auth admin, productos, catálogo y carrito con WhatsApp.
-- Fase 2: reparaciones admin y tracking público.
-- Fase 3: mejora UX/UI pública y administrativa.
-- Fase 4: preparación para despliegue y operación productiva básica.

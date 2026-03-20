@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@features/admin/auth/AuthContext'
 import { ApiError } from '@shared/api/client'
-import { addRepairUpdate, createRepair, fetchRepair, fetchRepairs, updateRepair } from '@shared/api/repairs'
+import { fetchInventoryItems } from '@shared/api/inventory'
+import { addRepairPart, addRepairUpdate, createRepair, fetchRepair, fetchRepairs, revertRepairPart, updateRepair } from '@shared/api/repairs'
 import { formatCurrency } from '@shared/lib/currency'
 import { formatDateTime, formatStatusLabel } from '@shared/lib/date'
+import type { InventoryItem } from '@shared/types/inventory'
 import type { Repair, RepairPayload, RepairStatus, RepairSummary } from '@shared/types/repair'
 
 const repairStatuses: RepairStatus[] = ['ingresado', 'diagnostico', 'en_proceso', 'listo', 'entregado']
@@ -27,8 +29,14 @@ const initialForm = {
   diagnostico: '',
   accesorios: '',
   costoEstimado: '0',
-  costoFinal: '0',
+  manoObra: '0',
   responsable: '',
+  notas: '',
+}
+
+const initialPartForm = {
+  inventoryItemId: '',
+  cantidad: '1',
   notas: '',
 }
 
@@ -37,10 +45,12 @@ export function AdminRepairsPage() {
   const { user, logoutAction } = useAuth()
   const [repairs, setRepairs] = useState<RepairSummary[]>([])
   const [selectedRepair, setSelectedRepair] = useState<Repair | null>(null)
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [statusSaving, setStatusSaving] = useState(false)
+  const [partSaving, setPartSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -49,6 +59,7 @@ export function AdminRepairsPage() {
   const [statusComment, setStatusComment] = useState('')
   const [nextStatus, setNextStatus] = useState<RepairStatus>('diagnostico')
   const [form, setForm] = useState(initialForm)
+  const [partForm, setPartForm] = useState(initialPartForm)
 
   const summary = useMemo(
     () => ({
@@ -60,6 +71,12 @@ export function AdminRepairsPage() {
   )
 
   const isEditing = editingId !== null
+  const selectedPartItem = partForm.inventoryItemId
+    ? inventoryItems.find((item) => item.id === Number(partForm.inventoryItemId)) ?? null
+    : null
+  const formPartsSubtotal = editingId !== null && selectedRepair?.id === editingId ? selectedRepair.subtotalRepuestos : 0
+  const formManualLabor = Number(form.manoObra || '0')
+  const formDerivedTotal = formPartsSubtotal + (Number.isFinite(formManualLabor) ? formManualLabor : 0)
 
   const handleSessionError = async (reason: unknown) => {
     if (reason instanceof ApiError && reason.status === 401) {
@@ -116,19 +133,25 @@ export function AdminRepairsPage() {
     loadRepairs().catch(() => {})
   }, [])
 
+  useEffect(() => {
+    fetchInventoryItems({ estado: 'activo' })
+      .then((items) => setInventoryItems(items))
+      .catch(() => {})
+  }, [])
+
   const buildPayload = (): RepairPayload => {
     if (!form.clienteNombre.trim()) throw new Error('El nombre del cliente es obligatorio.')
     if (!form.motivoIngreso.trim()) throw new Error('El motivo de ingreso es obligatorio.')
 
     const costoEstimado = Number(form.costoEstimado || '0')
-    const costoFinal = Number(form.costoFinal || '0')
+    const manoObra = Number(form.manoObra || '0')
 
     if (!Number.isFinite(costoEstimado) || costoEstimado < 0) {
       throw new Error('El costo estimado debe ser mayor o igual a cero.')
     }
 
-    if (!Number.isFinite(costoFinal) || costoFinal < 0) {
-      throw new Error('El costo final debe ser mayor o igual a cero.')
+    if (!Number.isFinite(manoObra) || manoObra < 0) {
+      throw new Error('La mano de obra debe ser mayor o igual a cero.')
     }
 
     return {
@@ -150,7 +173,7 @@ export function AdminRepairsPage() {
       diagnostico: form.diagnostico.trim() || undefined,
       accesorios: form.accesorios.trim() || undefined,
       costoEstimado,
-      costoFinal,
+      manoObra,
       responsable: form.responsable.trim() || undefined,
       notas: form.notas.trim() || undefined,
     }
@@ -175,10 +198,66 @@ export function AdminRepairsPage() {
       diagnostico: repair.diagnostico ?? '',
       accesorios: repair.accesorios ?? '',
       costoEstimado: String(repair.costoEstimado ?? 0),
-      costoFinal: String(repair.costoFinal ?? 0),
+      manoObra: String(repair.manoObra ?? 0),
       responsable: repair.responsable ?? '',
       notas: repair.notas ?? '',
     })
+  }
+
+  const handlePartSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!selectedRepair) return
+
+    try {
+      const inventoryItemId = Number(partForm.inventoryItemId)
+      const cantidad = Number(partForm.cantidad)
+
+      if (!Number.isInteger(inventoryItemId) || inventoryItemId <= 0) {
+        throw new Error('Selecciona un item de inventario valido.')
+      }
+
+      if (!Number.isFinite(cantidad) || cantidad <= 0) {
+        throw new Error('La cantidad debe ser mayor a cero.')
+      }
+
+      setPartSaving(true)
+      setError(null)
+      setSuccess(null)
+
+      await addRepairPart(selectedRepair.id, {
+        inventoryItemId,
+        cantidad,
+        notas: partForm.notas.trim() || undefined,
+      })
+
+      setPartForm(initialPartForm)
+      setSuccess('Repuesto consumido y descontado de inventario.')
+      await loadRepairDetail(selectedRepair.id)
+    } catch (partError) {
+      if (await handleSessionError(partError)) return
+      setError(partError instanceof Error ? partError.message : 'No se pudo registrar el repuesto')
+    } finally {
+      setPartSaving(false)
+    }
+  }
+
+  const handleRevertPart = async (partId: number) => {
+    if (!selectedRepair) return
+    if (!window.confirm('Esta accion devolvera el stock al inventario y dejara el consumo como revertido.')) return
+
+    try {
+      setPartSaving(true)
+      setError(null)
+      setSuccess(null)
+      await revertRepairPart(selectedRepair.id, partId)
+      setSuccess('Consumo revertido y stock repuesto en inventario.')
+      await loadRepairDetail(selectedRepair.id)
+    } catch (partError) {
+      if (await handleSessionError(partError)) return
+      setError(partError instanceof Error ? partError.message : 'No se pudo revertir el consumo')
+    } finally {
+      setPartSaving(false)
+    }
   }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -356,13 +435,24 @@ export function AdminRepairsPage() {
               <input type="number" min="0" value={form.costoEstimado} onChange={(event) => setForm((prev) => ({ ...prev, costoEstimado: event.target.value }))} />
             </label>
             <label>
-              <span>Costo final</span>
-              <input type="number" min="0" value={form.costoFinal} onChange={(event) => setForm((prev) => ({ ...prev, costoFinal: event.target.value }))} />
+              <span>Mano de obra</span>
+              <input type="number" min="0" value={form.manoObra} onChange={(event) => setForm((prev) => ({ ...prev, manoObra: event.target.value }))} />
             </label>
             <label>
               <span>Responsable</span>
               <input value={form.responsable} onChange={(event) => setForm((prev) => ({ ...prev, responsable: event.target.value }))} />
             </label>
+          </div>
+
+          <div className="product-link-context">
+            <strong>Regla economica activa</strong>
+            <div className="tag-row">
+              <span>Estimado manual: {formatCurrency(Number(form.costoEstimado || '0'))}</span>
+              <span>Repuestos calculados: {formatCurrency(formPartsSubtotal)}</span>
+              <span>Mano de obra manual: {formatCurrency(formManualLabor)}</span>
+              <span>Total final derivado: {formatCurrency(formDerivedTotal)}</span>
+            </div>
+            <p className="muted">Los repuestos consumidos no se editan aqui. El total final real se recalcula con los repuestos del ticket.</p>
           </div>
 
           <label>
@@ -433,6 +523,8 @@ export function AdminRepairsPage() {
                       <p className="muted">{repair.motivoIngreso ?? 'Sin motivo registrado'}</p>
                       <div className="tag-row">
                         <span>{formatCurrency(repair.costoEstimado)}</span>
+                        <span>Repuestos: {formatCurrency(repair.subtotalRepuestos)}</span>
+                        <span>Mano de obra: {formatCurrency(repair.manoObra)}</span>
                         <span>{repair.clienteTelefono ?? 'Sin telefono'}</span>
                       </div>
                     </div>
@@ -472,7 +564,9 @@ export function AdminRepairsPage() {
 
                 <div className="tag-row">
                   <span>Estimado: {formatCurrency(selectedRepair.costoEstimado)}</span>
-                  <span>Final: {formatCurrency(selectedRepair.costoFinal)}</span>
+                  <span>Repuestos: {formatCurrency(selectedRepair.subtotalRepuestos)}</span>
+                  <span>Mano de obra: {formatCurrency(selectedRepair.manoObra)}</span>
+                  <span>Total final: {formatCurrency(selectedRepair.costoFinal)}</span>
                   <span>Responsable: {selectedRepair.responsable ?? 'Sin asignar'}</span>
                 </div>
 
@@ -484,6 +578,96 @@ export function AdminRepairsPage() {
                 <div className="detail-block">
                   <strong>Diagnostico</strong>
                   <p>{selectedRepair.diagnostico ?? 'Pendiente'}</p>
+                </div>
+
+                <div className="stack-sm">
+                  <div className="section-title">Repuestos consumidos</div>
+                  <form className="stack-sm repair-parts-form" onSubmit={handlePartSubmit}>
+                    <div className="field-row repair-parts-row">
+                      <label>
+                        <span>Item de inventario</span>
+                        <select
+                          disabled={selectedRepair.estado === 'entregado' || partSaving}
+                          value={partForm.inventoryItemId}
+                          onChange={(event) => setPartForm((prev) => ({ ...prev, inventoryItemId: event.target.value }))}
+                        >
+                          <option value="">Selecciona un item</option>
+                          {inventoryItems.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.sku} - {item.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span>Cantidad</span>
+                        <input
+                          type="number"
+                          min="0.001"
+                          step="0.001"
+                          disabled={selectedRepair.estado === 'entregado' || partSaving}
+                          value={partForm.cantidad}
+                          onChange={(event) => setPartForm((prev) => ({ ...prev, cantidad: event.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        <span>Notas</span>
+                        <input
+                          disabled={selectedRepair.estado === 'entregado' || partSaving}
+                          value={partForm.notas}
+                          onChange={(event) => setPartForm((prev) => ({ ...prev, notas: event.target.value }))}
+                        />
+                      </label>
+                      <div className="toolbar-end">
+                        <button className="primary-button" disabled={selectedRepair.estado === 'entregado' || partSaving} type="submit">
+                          {partSaving ? 'Guardando...' : 'Agregar repuesto'}
+                        </button>
+                      </div>
+                    </div>
+                    {selectedRepair.estado === 'entregado' && <p className="muted">Una reparacion entregada ya no admite nuevos consumos ni reversiones.</p>}
+                    {selectedPartItem && (
+                      <div className="tag-row">
+                        <span>SKU: {selectedPartItem.sku}</span>
+                        <span>{selectedPartItem.nombre}</span>
+                        <span>Stock actual: {selectedPartItem.stockActual}</span>
+                        <span>Tipo: {selectedPartItem.tipo}</span>
+                      </div>
+                    )}
+                  </form>
+
+                  {selectedRepair.parts.length === 0 ? (
+                    <p className="muted">Todavia no hay repuestos registrados para este ticket.</p>
+                  ) : (
+                    <div className="timeline">
+                      {selectedRepair.parts.map((part) => (
+                        <article className="timeline-item" key={part.id}>
+                          <div className="timeline-item-head">
+                            <span className={`status-pill ${part.estado === 'consumido' ? 'status-en_proceso' : 'status-entregado'}`}>
+                              {part.estado === 'consumido' ? 'Consumido' : 'Revertido'}
+                            </span>
+                            <span className="muted">{formatDateTime(part.createdAt)}</span>
+                          </div>
+                          <p>
+                            {part.itemSku} · {part.itemNombre} · Cantidad: {part.cantidad}
+                          </p>
+                          <div className="tag-row">
+                            <span>Costo ref: {formatCurrency(part.costoUnitarioReferencial)}</span>
+                            <span>Precio ref: {formatCurrency(part.precioUnitarioReferencial)}</span>
+                            <span>Total ref: {formatCurrency(part.precioUnitarioReferencial * part.cantidad)}</span>
+                          </div>
+                          <p>{part.notas || 'Sin notas'}</p>
+                          {part.estado === 'revertido' && part.revertedAt && <span className="muted">Revertido: {formatDateTime(part.revertedAt)}</span>}
+                          {part.estado === 'consumido' && selectedRepair.estado !== 'entregado' && (
+                            <div className="button-row">
+                              <button className="ghost-button" disabled={partSaving} onClick={() => handleRevertPart(part.id)} type="button">
+                                Revertir consumo
+                              </button>
+                            </div>
+                          )}
+                        </article>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <form className="stack-sm" onSubmit={handleStatusSubmit}>

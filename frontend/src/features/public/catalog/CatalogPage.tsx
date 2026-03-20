@@ -49,7 +49,7 @@ export function CatalogPage() {
             <a className="primary-button" href="#catalogo">
               Ver catalogo
             </a>
-            <Link className="ghost-button" to="/tracking">
+            <Link className="ghost-button" to="/seguimiento">
               Seguir reparacion
             </Link>
           </div>

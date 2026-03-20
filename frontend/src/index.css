@@ -649,6 +649,93 @@ select:focus {
   align-items: start;
 }
 
+.inventory-top-grid,
+.inventory-bottom-grid {
+  display: grid;
+  gap: 24px;
+}
+
+.inventory-top-grid {
+  grid-template-columns: minmax(360px, 1.3fr) minmax(300px, 0.9fr);
+}
+
+.inventory-bottom-grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.inventory-category-list,
+.inventory-list {
+  display: grid;
+  gap: 12px;
+}
+
+.inventory-category-item,
+.inventory-list-item {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: #fff;
+  border-radius: 18px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+  text-align: left;
+}
+
+.inventory-list-item.active {
+  border-color: rgba(15, 118, 110, 0.28);
+  box-shadow: 0 18px 36px rgba(15, 118, 110, 0.1);
+}
+
+.inventory-list-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.inventory-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 18px;
+  align-items: start;
+}
+
+.inventory-detail-media {
+  aspect-ratio: 1 / 1;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.2), transparent 42%),
+    linear-gradient(135deg, #dff6fb, #f8fbfd);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #0f766e;
+  font-weight: 700;
+}
+
+.inventory-detail-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.inventory-warning-tag {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.inventory-filter-row {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+}
+
+.inventory-movement-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.inventory-lowstock-check {
+  align-self: end;
+}
+
 .field-row {
   display: grid;
   gap: 12px;
@@ -668,6 +755,86 @@ select:focus {
 .admin-product-main {
   display: grid;
   gap: 8px;
+}
+
+.product-admin-legend {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.product-migration-banner,
+.product-link-context {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.product-migration-banner {
+  background: #ecfdf5;
+  border-color: rgba(15, 118, 110, 0.18);
+}
+
+.product-migration-banner-warning {
+  background: #fff7ed;
+  border-color: rgba(194, 65, 12, 0.18);
+}
+
+.product-migration-banner p,
+.product-migration-banner strong,
+.product-link-context p,
+.product-link-context strong {
+  margin: 0;
+}
+
+.product-stock-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.product-stock-badge-linked {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.product-stock-badge-manual {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.product-stock-mode-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.product-stock-mode-card p,
+.product-stock-mode-card strong {
+  margin: 0;
+}
+
+.product-link-context {
+  background: #f0f9ff;
+  border-color: rgba(8, 145, 178, 0.18);
+}
+
+.product-stock-mode-card-linked {
+  background: #ecfdf5;
+  border-color: rgba(22, 163, 74, 0.18);
+}
+
+.product-stock-mode-card-warning {
+  background: #fff7ed;
+  border-color: rgba(194, 65, 12, 0.18);
 }
 
 .admin-item-head,
@@ -803,6 +970,15 @@ select:focus {
   min-width: 0;
 }
 
+.repair-parts-form,
+.repair-parts-row {
+  gap: 12px;
+}
+
+.repair-parts-row {
+  grid-template-columns: minmax(220px, 1.4fr) minmax(120px, 180px) minmax(0, 1fr) auto;
+}
+
 .tracking-search {
   display: grid;
   gap: 12px;
@@ -841,6 +1017,8 @@ select:focus {
 @media (max-width: 1080px) {
   .catalog-content,
   .admin-grid,
+  .inventory-top-grid,
+  .inventory-bottom-grid,
   .hero-commerce,
   .catalog-toolbar {
     grid-template-columns: 1fr;
@@ -891,6 +1069,8 @@ select:focus {
   }
 
   .field-row,
+  .inventory-filter-row,
+  .inventory-movement-row,
   .status-form-row {
     grid-template-columns: 1fr;
   }
@@ -901,7 +1081,9 @@ select:focus {
   .cart-item,
   .admin-product-item,
   .tracking-header,
-  .repair-detail-grid {
+  .repair-detail-grid,
+  .inventory-list-item-head,
+  .inventory-detail-grid {
     display: grid;
     justify-content: initial;
   }

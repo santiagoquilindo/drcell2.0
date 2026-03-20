@@ -134,6 +134,15 @@ router.post('/', async (req, res, next) => {
     const invoiceId = invoiceResult.rows[0]?.id as number
 
     for (const item of totals.items) {
+      if (data.tipo === 'factura' && item.inventarioItemId) {
+        await applyInventorySale(client, {
+          itemId: item.inventarioItemId,
+          cantidad: item.cantidad,
+          referencia: consecutivo,
+          adminUserId: req.admin?.adminId ?? null,
+        })
+      }
+
       await client.query(
         `
           INSERT INTO invoice_items
@@ -396,4 +405,63 @@ async function generateConsecutivo(client: PoolClient) {
   const month = (today.getMonth() + 1).toString().padStart(2, '0')
   const day = today.getDate().toString().padStart(2, '0')
   return `DC${year}${month}${day}-${result.rows[0]!.seq}`
+}
+
+async function applyInventorySale(
+  client: PoolClient,
+  input: {
+    itemId: number
+    cantidad: number
+    referencia: string
+    adminUserId: number | null
+  },
+) {
+  const itemResult = await client.query<{
+    stockActual: string
+    permiteStockNegativo: boolean
+    nombre: string
+  }>(
+    `
+      SELECT
+        stock_actual AS "stockActual",
+        permite_stock_negativo AS "permiteStockNegativo",
+        nombre
+      FROM inventario_items
+      WHERE id = $1
+      FOR UPDATE
+    `,
+    [input.itemId],
+  )
+
+  if (itemResult.rowCount === 0) {
+    throw new Error('Uno de los items facturados no existe en inventario')
+  }
+
+  const item = itemResult.rows[0]
+  const stockAntes = Number(item.stockActual)
+  const stockDespues = stockAntes - input.cantidad
+
+  if (stockDespues < 0 && !item.permiteStockNegativo) {
+    throw new Error(`El item ${item.nombre} no tiene stock suficiente para facturar`)
+  }
+
+  await client.query('UPDATE inventario_items SET stock_actual = $2, updated_at = NOW() WHERE id = $1', [input.itemId, stockDespues])
+  await client.query(
+    `
+      INSERT INTO inventario_movimientos
+        (item_id, tipo_movimiento, cantidad, motivo, referencia, observaciones, stock_antes, stock_despues, admin_user_id)
+      VALUES
+        ($1, 'salida', $2, $3, $4, $5, $6, $7, $8)
+    `,
+    [
+      input.itemId,
+      input.cantidad,
+      'Salida por factura emitida',
+      input.referencia,
+      'Movimiento automatico generado al emitir una factura',
+      stockAntes,
+      stockDespues,
+      input.adminUserId,
+    ],
+  )
 }

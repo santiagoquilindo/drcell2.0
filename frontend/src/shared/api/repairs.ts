@@ -1,4 +1,13 @@
-import type { Repair, RepairPayload, RepairSummary, RepairTracking, RepairUpdate, RepairUpdatePayload } from '@shared/types/repair'
+import type {
+  Repair,
+  RepairPart,
+  RepairPartPayload,
+  RepairPayload,
+  RepairSummary,
+  RepairTracking,
+  RepairUpdate,
+  RepairUpdatePayload,
+} from '@shared/types/repair'
 
 import { apiRequest } from './client'
 
@@ -36,6 +45,21 @@ export async function addRepairUpdate(id: number, payload: RepairUpdatePayload) 
     method: 'POST',
     auth: true,
     body: JSON.stringify(payload),
+  })
+}
+
+export async function addRepairPart(id: number, payload: RepairPartPayload) {
+  return apiRequest<RepairPart>(`/repairs/${id}/parts`, {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function revertRepairPart(id: number, partId: number) {
+  return apiRequest<RepairPart>(`/repairs/${id}/parts/${partId}/revert`, {
+    method: 'POST',
+    auth: true,
   })
 }
 
